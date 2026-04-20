@@ -71,39 +71,6 @@
             color: #dc2626;
             margin-left: 4px;
         }
-        .branch-info-card {
-            background: linear-gradient(135deg, #e8f0fe 0%, #dbeafe 100%);
-            border-radius: 16px;
-            padding: 15px 20px;
-            margin-bottom: 25px;
-            border-left: 4px solid #0f5b9c;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-        .branch-info-text {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .branch-info-text i {
-            font-size: 1.8rem;
-            color: #0f5b9c;
-        }
-        .branch-info-text strong {
-            color: #0f5b9c;
-            font-size: 1.1rem;
-        }
-        .branch-badge {
-            background: #0f5b9c;
-            color: white;
-            padding: 6px 16px;
-            border-radius: 40px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
         .btn-primary-custom {
             background: #0f3b5f;
             border: none;
@@ -165,14 +132,16 @@
             background-color: #f1f5f9;
             cursor: not-allowed;
         }
+        select:disabled {
+            background-color: #f1f5f9;
+            cursor: not-allowed;
+        }
         footer { font-size: 12px; text-align: center; margin-top: 20px; color: #5b6e8c; }
         .modal-content { border-radius: 24px; }
         @media (max-width: 700px) {
             .tab-pane { padding: 20px; }
             .tab-btn { padding: 12px 16px; font-size: 0.9rem; }
-            .branch-info-card { flex-direction: column; align-items: flex-start; }
         }
-        /* Button loading state */
         .btn-loading {
             pointer-events: none;
             opacity: 0.7;
@@ -188,16 +157,13 @@
         .bi-spinner {
             animation: spin 1s linear infinite;
         }
-        /* Time input styling */
         .flatpickr-input {
             background: white;
         }
-        /* Select2 dropdown */
         .select2-dropdown {
             border-radius: 12px;
             overflow: hidden;
         }
-        /* No data message */
         .no-data-message {
             text-align: center;
             padding: 50px;
@@ -210,6 +176,17 @@
             font-size: 3rem;
             color: #cbd5e1;
             margin-bottom: 15px;
+        }
+        .status-auto-badge {
+            background: #e8f0fe;
+            color: #0f5b9c;
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 20px;
+            margin-left: 10px;
+        }
+        .modal-body .form-control[readonly] {
+            background-color: #f1f5f9;
         }
     </style>
 </head>
@@ -224,25 +201,10 @@
     <div id="addPane" class="tab-pane active-pane">
         <h4 class="mb-3"><i class="bi bi-battery-charging text-primary"></i> Register Power Event</h4>
         
-        <!-- Branch Info Card - Shows current branch from storage 
-        <div class="branch-info-card" id="branchInfoCard">
-            <div class="branch-info-text">
-                <i class="bi bi-building"></i>
-                <div>
-                    <strong>Current Treasury / Branch</strong><br>
-                    <span id="currentBranchDisplay" style="color: #1e293b;">Loading...</span>
-                </div>
-            </div>
-            <div class="branch-badge">
-                <i class="bi bi-shield-check"></i> Auto-detected from login
-            </div>
-        </div> -->
-        
         <div class="row g-4">
             <div class="col-md-6">
                 <label class="form-label required">Treasury / Branch</label>
                 <input type="text" id="branchName" class="form-control" readonly disabled>
-               
             </div>
             <div class="col-md-6">
                 <label class="form-label required">Date</label>
@@ -254,10 +216,11 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label required">Power Status</label>
-                <select id="powerStatus" class="form-select">
-                    <option value="Down" selected>🔴 Down (Failure)</option>
+                <select id="powerStatus" class="form-select" disabled>
+                    <option value="Down">🔴 Down (Failure)</option>
                     <option value="Up">🟢 Up (Restored)</option>
                 </select>
+                <small class="text-muted status-auto-badge"><i class="bi bi-magic"></i> Auto-detected from last status</small>
             </div>
             <div class="col-12 mt-3">
                 <button id="submitPowerBtn" class="btn btn-primary-custom px-4"><i class="bi bi-save"></i> Submit</button>
@@ -270,9 +233,6 @@
         <div class="d-flex justify-content-between align-items-center flex-wrap mb-3">
             <h4><i class="bi bi-clock-history"></i> Branch Power Logs</h4>
             <div class="d-flex gap-2">
-                <select id="filterBranchTable" class="form-select w-auto" style="display:none">
-                    <option value="">All Branches</option>
-                </select>
                 <button id="refreshTableBtn" class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Refresh</button>
             </div>
         </div>
@@ -291,7 +251,7 @@
     </div>
 </div>
 
-<!-- Edit Modal -->
+<!-- Edit Modal - Only Date and Time are editable -->
 <div class="modal fade" id="editEventModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -307,19 +267,17 @@
                     <small class="text-muted">Branch cannot be changed</small>
                 </div>
                 <div class="mb-3">
+                    <label class="form-label">Power Status</label>
+                    <input type="text" id="editStatus" class="form-control" readonly disabled>
+                    <small class="text-muted">Status cannot be changed</small>
+                </div>
+                <div class="mb-3">
                     <label class="form-label">Date</label>
                     <input type="text" id="editDate" class="form-control flatpickr-edit-date">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Time (HH:MM:SS)</label>
                     <input type="text" id="editTime" class="form-control time-edit-picker" placeholder="HH:MM:SS">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Power Status</label>
-                    <select id="editStatus" class="form-select">
-                        <option value="Down">Down (Failure)</option>
-                        <option value="Up">Up (Restored)</option>
-                    </select>
                 </div>
             </div>
             <div class="modal-footer">
@@ -354,12 +312,12 @@
     let currentEditRowId = null;
     let flatpickrDate, flatpickrEditDate, timePickerInst, timeEditInst;
     let currentBranch = null;
+    let lastPowerStatus = null;
 
     // ======================== GET BRANCH FROM STORAGE ========================
     function getBranchFromStorage() {
         let branch = null;
         
-        // Check sessionStorage first (from main app login)
         const sessionUser = sessionStorage.getItem('currentUser');
         if (sessionUser) {
             try {
@@ -371,7 +329,6 @@
             }
         }
         
-        // Fallback to localStorage
         if (!branch) {
             const localUser = localStorage.getItem('currentUser');
             if (localUser) {
@@ -385,7 +342,6 @@
             }
         }
         
-        // Also check for selectedBranch from other storage
         if (!branch) {
             branch = localStorage.getItem('selectedBranch');
             console.log("Branch from selectedBranch storage:", branch);
@@ -394,24 +350,58 @@
         return branch;
     }
 
+    // ======================== GET LAST POWER STATUS FOR BRANCH ========================
+    async function getLastPowerStatus(branch) {
+        try {
+            const range = `${DATA_SHEET_NAME}!A:F`;
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${DATA_SHEET_ID}/values/${range}?key=${API_KEY}`;
+            const resp = await fetch(url);
+            const data = await resp.json();
+            
+            if (data.values && data.values.length > 1) {
+                const rows = data.values.slice(1);
+                const branchRows = rows.filter(row => row[1] === branch);
+                branchRows.sort((a, b) => (b[5] || "").localeCompare(a[5] || ""));
+                
+                if (branchRows.length > 0 && branchRows[0][4]) {
+                    return branchRows[0][4];
+                }
+            }
+            return null;
+        } catch (err) {
+            console.error("Error getting last power status:", err);
+            return null;
+        }
+    }
+
+    // ======================== UPDATE POWER STATUS BASED ON LAST STATUS ========================
+    async function updatePowerStatusByLastStatus() {
+        if (!currentBranch) return;
+        
+        const lastStatus = await getLastPowerStatus(currentBranch);
+        lastPowerStatus = lastStatus;
+        
+        if (lastStatus === 'Up') {
+            $('#powerStatus').val('Down');
+        } else if (lastStatus === 'Down') {
+            $('#powerStatus').val('Up');
+        } else {
+            $('#powerStatus').val('Down');
+        }
+        
+        console.log(`Last status: ${lastStatus}, New status set to: ${$('#powerStatus').val()}`);
+    }
+
     // ======================== UPDATE BRANCH DISPLAY ========================
     function updateBranchDisplay() {
         currentBranch = getBranchFromStorage();
         
         if (currentBranch) {
             $('#branchName').val(currentBranch);
-            $('#currentBranchDisplay').text(currentBranch);
-            $('#branchInfoCard').show();
-            
-            // Also update edit modal branch display
             $('#editBranch').val(currentBranch);
-            
-            // Set the filter dropdown to current branch
-            $('#filterBranchTable').val(currentBranch).trigger('change');
+            updatePowerStatusByLastStatus();
         } else {
             $('#branchName').val('No branch detected - Please login again');
-            $('#currentBranchDisplay').text('Not detected');
-            $('#branchInfoCard').show();
             console.warn('No branch found in storage');
         }
     }
@@ -443,7 +433,6 @@
         }); 
     }
 
-    // Show loading state on button
     function setButtonLoading(button, isLoading, originalText = null) {
         const $btn = $(button);
         if (isLoading) {
@@ -462,7 +451,6 @@
         }
     }
 
-    // Show global loading overlay
     function showGlobalLoading(message = 'Processing...') {
         if ($('#global-loading-overlay').length) return;
         const overlay = $(`
@@ -479,65 +467,6 @@
     function hideGlobalLoading() {
         $('#global-loading-overlay').remove();
     }
-
-    // ================ FETCH BRANCHES FOR FILTER ================
-    async function fetchBranchesForFilter() {
-        try {
-            const range = `${BRANCH_SHEET_NAME}!A2:A`;
-            const url = `https://sheets.googleapis.com/v4/spreadsheets/${BRANCH_SHEET_ID}/values/${range}?key=${API_KEY}`;
-            const resp = await fetch(url);
-            const data = await resp.json();
-            if(data.values && data.values.length) {
-                branchesList = data.values.map(row => row[0]).filter(v => v && v.trim() !== "");
-            } else {
-                branchesList = [];
-            }
-            localStorage.setItem("cachedBranches", JSON.stringify(branchesList));
-            populateFilterDropdown();
-        } catch(err) {
-            console.warn("Branch fetch error", err);
-            const cached = localStorage.getItem("cachedBranches");
-            if(cached) {
-                branchesList = JSON.parse(cached);
-            } else {
-                branchesList = [];
-            }
-            populateFilterDropdown();
-        }
-    }
-
-    function populateFilterDropdown() {
-        const filterBranch = $("#filterBranchTable");
-        filterBranch.empty().append('<option value="">All Branches</option>');
-        
-        // Add current branch first if exists and not already in list
-        if (currentBranch) {
-            filterBranch.append(`<option value="${escapeHtml(currentBranch)}" selected>${escapeHtml(currentBranch)}</option>`);
-        }
-        
-        branchesList.forEach(b => {
-            if (b !== currentBranch) {
-                filterBranch.append(`<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`);
-            }
-        });
-        
-        // Set the filter to current branch by default
-        if (currentBranch) {
-            filterBranch.val(currentBranch);
-        }
-    }
-
-    $(document).on("change", "#filterBranchTable", function() {
-        let branchVal = $(this).val();
-        localStorage.setItem("tableBranchFilter", branchVal);
-        if(dataTable) {
-            if (branchVal) {
-                dataTable.column(1).search(branchVal).draw();
-            } else {
-                dataTable.column(1).search('').draw();
-            }
-        }
-    });
 
     // ================ SUBMIT POWER EVENT ================
     async function submitPowerEvent() {
@@ -574,8 +503,10 @@
             Swal.fire({ icon: 'success', title: 'Success!', text: 'Power event added successfully', timer: 2000, showConfirmButton: false });
             document.getElementById("eventDate").value = formatDateDMY(new Date());
             document.getElementById("eventTime").value = formatTimeHHMMSS(new Date());
-            $("#powerStatus").val("Down");
-            setTimeout(() => { loadPowerDataAndRender(); }, 800);
+            setTimeout(() => { 
+                updatePowerStatusByLastStatus();
+                loadPowerDataAndRender(); 
+            }, 800);
         } catch(err) {
             console.error(err);
             Swal.fire({ icon: 'error', title: 'Submission Failed', text: 'Check Apps Script URL or network', confirmButtonColor: '#0f3b5f' });
@@ -586,7 +517,6 @@
 
     // ================ LOAD DATA & RENDER DATATABLE ================
     async function loadPowerDataAndRender() {
-        // Check if branch is available
         if (!currentBranch) {
             const logsContainer = $('#logsContainer');
             logsContainer.html(`
@@ -615,7 +545,7 @@
                 const startIdx = (sheetRows[0][0] && sheetRows[0][0].toString().toLowerCase().includes("id")) ? 1 : 0;
                 for(let i=startIdx; i<sheetRows.length; i++) {
                     const row = sheetRows[i];
-                    if(row.length >=5 && row[0]) {
+                    if(row.length >=5 && row[0] && row[1] === currentBranch) {
                         rows.push({
                             id: row[0],
                             branch: row[1] || "",
@@ -641,7 +571,6 @@
     function renderDataTable(records) {
         const tableBody = $("#powerLogsTable tbody");
         
-        // Restore the original container if it was replaced
         if ($('#logsContainer .no-data-message').length) {
             $('#logsContainer').html(`
                 <div class="table-responsive">
@@ -661,9 +590,6 @@
             dataTable.destroy();
             tableBody.empty();
         }
-        
-        // Filter records by current branch for display (optional - show all but filter by default)
-        // We'll show all records but the filter will be set to current branch
         
         dataTable = $("#powerLogsTable").DataTable({
             data: records,
@@ -688,16 +614,6 @@
             language: { search: "Filter:" },
             drawCallback: function() { attachTableActionEvents(); }
         });
-        
-        // Apply filter to current branch by default
-        if (currentBranch) {
-            dataTable.column(1).search(currentBranch).draw();
-        }
-        
-        const filterVal = localStorage.getItem("tableBranchFilter");
-        if (filterVal && filterVal !== currentBranch) {
-            dataTable.column(1).search(filterVal).draw();
-        }
     }
 
     function attachTableActionEvents() {
@@ -731,9 +647,9 @@
     function openEditModal(id, branch, date, time, status) {
         currentEditRowId = id;
         $("#editBranch").val(branch);
+        $("#editStatus").val(status === "Up" ? "🟢 Up (Restored)" : "🔴 Down (Failure)");
         $("#editDate").val(date);
         $("#editTime").val(time);
-        $("#editStatus").val(status);
         
         if(flatpickrEditDate) flatpickrEditDate.destroy();
         flatpickrEditDate = flatpickr("#editDate", { 
@@ -757,15 +673,18 @@
     async function updatePowerEvent() {
         const newDate = $("#editDate").val();
         const newTime = $("#editTime").val();
-        const newStatus = $("#editStatus").val();
         if(!newDate || !newTime) {
             Swal.fire({ icon: 'warning', title: 'Incomplete', text: 'Date and time required', confirmButtonColor: '#0f3b5f' });
             return;
         }
+        
+        // Get the current status from the record (we don't change it)
+        const currentStatus = $("#editStatus").val().includes("Up") ? "Up" : "Down";
+        
         let parts = newDate.split('/');
         let isoString = `${parts[2]}-${parts[1]}-${parts[0]}T${newTime}`;
         const updatedISO = new Date(isoString).toISOString();
-        const payload = { action: "UPDATE", rowId: currentEditRowId, date: newDate, time: newTime, powerStatus: newStatus, timestampISO: updatedISO };
+        const payload = { action: "UPDATE", rowId: currentEditRowId, date: newDate, time: newTime, powerStatus: currentStatus, timestampISO: updatedISO };
         
         const $btn = $("#confirmEditBtn");
         const originalHtml = $btn.html();
@@ -775,7 +694,10 @@
             await fetch(APPS_SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) });
             Swal.fire({ icon: 'success', title: 'Updated!', text: 'Record updated successfully', timer: 1500, showConfirmButton: false });
             bootstrap.Modal.getInstance(document.getElementById("editEventModal")).hide();
-            setTimeout(() => loadPowerDataAndRender(), 600);
+            setTimeout(() => {
+                updatePowerStatusByLastStatus();
+                loadPowerDataAndRender();
+            }, 600);
         } catch(e) {
             Swal.fire({ icon: 'error', title: 'Update Failed', text: e.message, confirmButtonColor: '#0f3b5f' });
         } finally {
@@ -790,6 +712,7 @@
             await fetch(APPS_SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) });
             hideGlobalLoading();
             Swal.fire({ icon: 'success', title: 'Deleted!', text: 'Record removed successfully', timer: 1500, showConfirmButton: false });
+            updatePowerStatusByLastStatus();
             loadPowerDataAndRender();
         } catch(e) {
             hideGlobalLoading();
@@ -817,39 +740,30 @@
         });
     }
 
-   function switchTab(tabId) {
-    if(tabId === 'add') {
-        $("#addPane").addClass("active-pane");
-        $("#editPane").removeClass("active-pane");
-        $("#tabAddBtn").addClass("active");
-        $("#tabEditBtn").removeClass("active");
-    } else {
-        $("#editPane").addClass("active-pane");
-        $("#addPane").removeClass("active-pane");
-        $("#tabEditBtn").addClass("active");
-        $("#tabAddBtn").removeClass("active");
-        
-        // Set filter dropdown to current branch and refresh table
-        if (currentBranch) {
-            $('#filterBranchTable').val(currentBranch).trigger('change');
-        }
-        
-        if(dataTable) {
-            dataTable.columns.adjust().draw();
+    function switchTab(tabId) {
+        if(tabId === 'add') {
+            $("#addPane").addClass("active-pane");
+            $("#editPane").removeClass("active-pane");
+            $("#tabAddBtn").addClass("active");
+            $("#tabEditBtn").removeClass("active");
+            updatePowerStatusByLastStatus();
         } else {
-            loadPowerDataAndRender();
+            $("#editPane").addClass("active-pane");
+            $("#addPane").removeClass("active-pane");
+            $("#tabEditBtn").addClass("active");
+            $("#tabAddBtn").removeClass("active");
+            
+            if(dataTable) {
+                dataTable.columns.adjust().draw();
+            } else {
+                loadPowerDataAndRender();
+            }
         }
     }
-}
 
     $(document).ready(async function() {
-        // First, get branch from storage
         updateBranchDisplay();
-        
         setDefaultDateTime();
-        
-        // Fetch branches for filter dropdown
-        await fetchBranchesForFilter();
         
         $("#submitPowerBtn").on("click", submitPowerEvent);
         $("#confirmEditBtn").on("click", updatePowerEvent);
@@ -858,11 +772,9 @@
         $("#tabEditBtn").on("click", () => switchTab('edit'));
         window.loadPowerDataAndRender = loadPowerDataAndRender;
         
-        // Load data only if branch is available
         if (currentBranch) {
             loadPowerDataAndRender();
         } else {
-            // Show no branch message
             const logsContainer = $('#logsContainer');
             logsContainer.html(`
                 <div class="no-data-message">
