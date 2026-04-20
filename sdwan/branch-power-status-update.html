@@ -516,6 +516,7 @@
     }
 
     // ================ LOAD DATA & RENDER DATATABLE ================
+       // ================ LOAD DATA & RENDER DATATABLE (Only rows where Resolved is blank or "No") ================
     async function loadPowerDataAndRender() {
         if (!currentBranch) {
             const logsContainer = $('#logsContainer');
@@ -534,7 +535,8 @@
         }
         
         showGlobalLoading('Loading power logs...');
-        const range = `${DATA_SHEET_NAME}!A:F`;
+        // Fetch columns A:G (including column G for Resolved status)
+        const range = `${DATA_SHEET_NAME}!A:G`;
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${DATA_SHEET_ID}/values/${range}?key=${API_KEY}`;
         try {
             const resp = await fetch(url);
@@ -545,14 +547,17 @@
                 const startIdx = (sheetRows[0][0] && sheetRows[0][0].toString().toLowerCase().includes("id")) ? 1 : 0;
                 for(let i=startIdx; i<sheetRows.length; i++) {
                     const row = sheetRows[i];
-                    if(row.length >=5 && row[0] && row[1] === currentBranch) {
+                    const resolved = row[6] ? row[6].toString().trim() : ""; // Column G - Resolved status
+                    // Only include rows for current branch AND where resolved is NOT "Yes"
+                    if(row.length >=5 && row[0] && row[1] === currentBranch && resolved !== "Yes") {
                         rows.push({
                             id: row[0],
                             branch: row[1] || "",
                             date: row[2] || "",
                             time: row[3] || "",
                             status: row[4] || "",
-                            timestampISO: row[5] || ""
+                            timestampISO: row[5] || "",
+                            resolved: resolved
                         });
                     }
                 }
