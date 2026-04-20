@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOC Admin · Login</title>
+    <!-- Bootstrap 5.3 + icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- SweetAlert2 -->
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    <!-- Local CSS - Fixed path -->
+    <link rel="stylesheet" href="./css/main-style.css">
+    <link rel="icon" type="image/svg+xml" href="./images/favicon.svg">
+</head>
+<body class="light-theme">
+    <!-- Login Overlay -->
+    <div class="login-overlay" id="loginOverlay">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-header">
+                    <div class="login-logo">
+                        <i class="bi bi-compass"></i>
+                    </div>
+                    <h2>NOC Admin</h2>
+                    <p>Network Operations Center</p>
+                </div>
+                <div class="login-body">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" placeholder="Enter username">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" placeholder="Enter password">
+                    </div>
+                    <button class="btn btn-primary w-100" id="loginBtn">
+                        <span class="spinner-border spinner-border-sm d-none" id="loginSpinner" role="status" aria-hidden="true"></span>
+                        <span id="loginText">Login</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard (initially hidden) -->
+    <div class="dashboard-container" id="dashboardContainer" style="display: none;">
+        <!-- Navbar: hamburger right after brand, theme toggle and mobile icon on right -->
+        <nav class="navbar navbar-custom">
+            <div class="container-fluid">
+                <!-- Left group: brand + hamburger (desktop toggle) -->
+                <div class="d-flex align-items-center">
+                    <a class="navbar-brand" href="#">
+                        <div class="logo"><i class="bi bi-compass"></i></div>
+                        <div class="brand-text">
+                            <h1>NOC Admin</h1>
+                            <span>Network Operations Center</span>
+                        </div>
+                    </a>
+                    <!-- Desktop hamburger (visible on lg) to toggle sidebar -->
+                    <button class="sidebar-toggle-btn desktop-toggle" id="desktopSidebarToggle" title="Toggle sidebar">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <!-- Mobile hamburger (visible below lg) triggers offcanvas -->
+                    <button class="sidebar-toggle-btn mobile-only-toggle d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileMenuOffcanvas" aria-label="Menu">
+                        <i class="bi bi-list"></i>
+                    </button>
+                </div>
+
+                <!-- Right side: theme toggle only -->
+                <div class="d-flex align-items-center">
+                    <div class="theme-switch-wrapper">
+                        <label class="theme-switch">
+                            <input type="checkbox" id="theme-toggle">
+                            <span class="slider">
+                                <i class="bi bi-sun"></i>
+                                <i class="bi bi-moon"></i>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Wrapper: sidebar + content -->
+        <div class="wrapper">
+            <!-- Desktop sidebar (collapsible, visible on large) -->
+            <div class="sidebar d-none d-lg-block" id="desktopSidebarContainer">
+                <div class="sidebar-menu-container" id="desktopSidebar">
+                    <div class="text-muted p-3"> <div class="loading-spinner"></div></div>
+                </div>
+            </div>
+
+            <!-- Content area with iframe -->
+            <div class="content-area">
+                <iframe id="content-frame" src="about:blank" title="Content"></iframe>
+                <div class="loading" id="loading">
+                    <div class="loading-spinner"></div> Loading...
+                </div>
+                <div class="welcome-message" id="welcome-message">
+                    <h2><i class="bi bi-compass"></i> NOC Admin</h2>
+                    <p>Select a menu item to get started</p>
+                    <p class="text-muted mt-3" style="font-size: 0.9rem;">Network Operations Center</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile offcanvas sidebar -->
+        <div class="offcanvas offcanvas-start d-lg-none" tabindex="-1" id="mobileMenuOffcanvas" aria-labelledby="offcanvasLabel">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title" id="offcanvasLabel">
+                    <i class="bi bi-compass me-2"></i>NOC Admin
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body" id="mobileSidebar">
+                <div class="text-muted">Loading menu...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- scripts - Fixed paths -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="./js/main-script.js"></script>
+</body>
+</html>
