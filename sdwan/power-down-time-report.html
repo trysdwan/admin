@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Power Down Hours Report | Treasury Downtime Analysis</title>
     
-    <!-- LOCAL CSS -->
-    <link rel="stylesheet" href="../css/bootstrap.min.css">
-    <link rel="stylesheet" href="../css/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="../css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" href="../css/select2.min.css">
-    <link rel="stylesheet" href="../css/select2-bootstrap-5-theme.min.css">
-    <link rel="stylesheet" href="../css/flatpickr.min.css">
-    <link rel="stylesheet" href="../css/sweetalert2.min.css">
+    <!-- LOCAL CSS (fallback to CDN if needed, but keeping local paths as per original) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     
     <style>
         :root {
@@ -410,7 +410,7 @@
                 <div class="total-footer">
                     <div class="total-label">
                         <i class="bi bi-hourglass-bottom"></i>
-                        <span>Total Power Failure Time (Period)</span>
+                        <span>Total Power Failure Time (Period) - <strong style="font-weight:800">Only Resolved Incidents</strong></span>
                     </div>
                     <div class="total-time" id="totalDuration">0 Days 0 Hours 0 Minutes 0 Seconds</div>
                 </div>
@@ -418,14 +418,13 @@
         </div>
     </div>
     
-    <!-- LOCAL SCRIPTS -->
-    <script src="../js/jquery.min.js"></script>
-    <script src="../js/bootstrap.bundle.min.js"></script>
-    <script src="../js/jquery.dataTables.min.js"></script>
-    <script src="../js/dataTables.bootstrap5.min.js"></script>
-    <script src="../js/flatpickr.min.js"></script>
-    <script src="../js/sweetalert2.min.js"></script>
-    <!-- Export libraries (XLSX, FileSaver, jsPDF, autoTable) -->
+    <!-- SCRIPTS (CDN for reliability) -->
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -439,14 +438,15 @@
         
         let flatpickrFrom, flatpickrTo;
         let dataTable = null;
-        let currentEventsData = []; // Store current events for export
-
+        let currentEventsData = []; // Store all processed events for export
+        
         // ======================== UTILITY FUNCTIONS ========================
         function parseDMY(dateStr) {
             if (!dateStr) return null;
             const parts = dateStr.split('/');
             if (parts.length !== 3) return null;
-            return new Date(Date.UTC(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]), 12, 0, 0));
+            // Create date in local timezone noon to avoid UTC shifts, consistent comparison
+            return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]), 12, 0, 0);
         }
         
         function parseDateTime(dateStr, timeStr) {
@@ -454,14 +454,12 @@
             const dateParts = dateStr.split('/');
             const timeParts = timeStr.split(':');
             if (dateParts.length !== 3 || timeParts.length < 2) return null;
-            
             const year = parseInt(dateParts[2]);
             const month = parseInt(dateParts[1]) - 1;
             const day = parseInt(dateParts[0]);
             const hours = parseInt(timeParts[0]);
             const minutes = parseInt(timeParts[1]);
             const seconds = timeParts[2] ? parseInt(timeParts[2]) : 0;
-            
             return new Date(year, month, day, hours, minutes, seconds);
         }
         
@@ -472,13 +470,11 @@
             const hours = Math.floor((seconds % 86400) / 3600);
             const minutes = Math.floor((seconds % 3600) / 60);
             const secs = seconds % 60;
-            
             const parts = [];
             if (days > 0) parts.push(`${days} Day${days !== 1 ? 's' : ''}`);
             if (hours > 0) parts.push(`${hours} Hour${hours !== 1 ? 's' : ''}`);
             if (minutes > 0) parts.push(`${minutes} Minute${minutes !== 1 ? 's' : ''}`);
             if (secs > 0 || parts.length === 0) parts.push(`${secs} Second${secs !== 1 ? 's' : ''}`);
-            
             return parts.join(' ');
         }
         
@@ -543,7 +539,7 @@
                 const fromDateObj = parseDMY(fromDateStr);
                 const toDateObj = parseDMY(toDateStr);
                 const endOfPeriod = new Date(toDateObj);
-                endOfPeriod.setUTCHours(23, 59, 59, 999);
+                endOfPeriod.setHours(23, 59, 59, 999);
                 
                 let allRecords = [];
                 for (let i = startIdx; i < sheetRows.length; i++) {
@@ -576,12 +572,13 @@
                 
                 const downtimeEvents = [];
                 const branchMap = new Map();
-                let ongoingCount = 0;
                 
                 for (const record of allRecords) {
                     if (!branchMap.has(record.branch)) branchMap.set(record.branch, []);
                     branchMap.get(record.branch).push(record);
                 }
+                
+                let ongoingCount = 0;
                 
                 for (const [branch, records] of branchMap.entries()) {
                     let i = 0;
@@ -599,31 +596,38 @@
                                 downtimeEvents.push({
                                     branch, downDateTime, downDate: current.date, downTime: current.time,
                                     upDateTime, upDate: upEvent.date, upTime: upEvent.time,
-                                    duration: durationSeconds, status: "Resolved"
+                                    duration: durationSeconds, status: "Resolved",
+                                    hasValidPair: true  // flag indicating resolved with up time
                                 });
                                 i = j + 1;
                             } else {
+                                // ONLY DOWN, NO UP DATE/TIME AVAILABLE: duration is ZERO for total calculation (excluded from total failure time)
                                 const downDateTime = parseDateTime(current.date, current.time);
-                                let durationSeconds = downDateTime ? Math.max(0, Math.floor((endOfPeriod - downDateTime) / 1000)) : 0;
+                                // duration remains 0 because unresolved – does NOT contribute to total downtime sum.
                                 downtimeEvents.push({
                                     branch, downDateTime, downDate: current.date, downTime: current.time,
-                                    upDateTime: null, upDate: "—", upTime: "Ongoing",
-                                    duration: durationSeconds, status: "Ongoing"
+                                    upDateTime: null, upDate: "—", upTime: "Ongoing / No Restoration",
+                                    duration: 0,   // CRITICAL: unresolved incident adds 0 to total failure duration
+                                    status: "Ongoing",
+                                    hasValidPair: false
                                 });
                                 ongoingCount++;
                                 i++;
                             }
                         } else if (current.status === "Up") {
+                            // Orphan Up events: no down pair, treat as zero duration
                             downtimeEvents.push({
                                 branch, downDateTime: null, downDate: "Unknown", downTime: "Unknown",
                                 upDateTime: parseDateTime(current.date, current.time), upDate: current.date, upTime: current.time,
-                                duration: 0, status: "Unknown Start"
+                                duration: 0, status: "Unknown Start",
+                                hasValidPair: false
                             });
                             i++;
                         } else { i++; }
                     }
                 }
                 
+                // Sort by downDateTime (if available)
                 downtimeEvents.sort((a, b) => {
                     if (!a.downDateTime && !b.downDateTime) return 0;
                     if (!a.downDateTime) return 1;
@@ -633,8 +637,12 @@
                 
                 currentEventsData = downtimeEvents;
                 
+                // Calculate total duration ONLY for resolved incidents (status "Resolved" OR where hasValidPair is true)
+                const totalDurationSeconds = downtimeEvents
+                    .filter(event => event.status === "Resolved" && event.hasValidPair === true)
+                    .reduce((sum, e) => sum + e.duration, 0);
+                
                 const totalIncidents = downtimeEvents.length;
-                const totalDurationSeconds = downtimeEvents.reduce((sum, e) => sum + e.duration, 0);
                 const uniqueTreasuries = new Set(downtimeEvents.map(e => e.branch)).size;
                 
                 $('#totalTreasuries').text(uniqueTreasuries);
@@ -650,6 +658,18 @@
                 
                 if (downtimeEvents.length === 0) {
                     Swal.fire({ icon: 'info', title: 'No Downtime Events', text: 'No confirmed power failure events found in the selected date range', confirmButtonColor: '#0f5b9c' });
+                } else {
+                    // Show note if any unresolved incidents excluded from total
+                    const unresolved = downtimeEvents.filter(e => e.status === "Ongoing" || e.status === "Unknown Start").length;
+                    if (unresolved > 0) {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Calculation Note',
+                            html: `<strong>Total Downtime excludes unresolved failures.</strong><br/>${unresolved} incident(s) without an "Up" timestamp are not counted in total duration.`,
+                            confirmButtonColor: '#0f5b9c',
+                            toast: false
+                        });
+                    }
                 }
             } catch (err) {
                 console.error(err);
@@ -669,13 +689,25 @@
             for (const event of events) {
                 let statusBadge = '', durationClass = 'duration-badge';
                 if (event.status === "Resolved") statusBadge = `<span class="badge-up"><i class="bi bi-check-circle"></i> Resolved</span>`;
-                else if (event.status === "Ongoing") { statusBadge = `<span class="badge-ongoing"><i class="bi bi-exclamation-triangle"></i> Ongoing</span>`; durationClass += ' duration-ongoing'; }
+                else if (event.status === "Ongoing") { statusBadge = `<span class="badge-ongoing"><i class="bi bi-exclamation-triangle"></i> Ongoing (No Up record)</span>`; durationClass += ' duration-ongoing'; }
                 else statusBadge = `<span class="badge-down"><i class="bi bi-question-circle"></i> Unknown Start</span>`;
                 
                 let downDisplay = (event.downDate === "Unknown") ? `<span class="text-muted"><i class="bi bi-question-circle"></i> Unknown</span>` : `<div class="datetime-display"><span class="badge-down" style="background-color: #ef4444; color: white; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; margin-right: 6px;">DOWN</span> ${event.downDate} ${event.downTime}</div>`;
-                let upDisplay = (event.upTime === "Ongoing") ? `<div class="datetime-display"><span class="badge-ongoing" style="background-color: #f59e0b; color: white; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; margin-right: 6px;">ONGOING</span> Not yet restored</div>` : (event.upDate === "Unknown" || event.upDate === "—") ? `<span class="text-muted"><i class="bi bi-question-circle"></i> Unknown</span>` : `<div class="datetime-display"><span class="badge-up" style="background-color: #10b981; color: white; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; margin-right: 6px;">UP</span> ${event.upDate} ${event.upTime}</div>`;
-                const durationDisplay = event.status === "Unknown Start" ? `<span class="text-muted">—</span>` : `<span class="${durationClass}"><i class="bi bi-clock"></i> ${formatDuration(event.duration)}</span>`;
-                html += `<tr><td>${serialNo++}</td><td><i class="bi bi-building me-1"></i> <strong>${escapeHtml(event.branch)}</strong></td><td>${downDisplay}</td><td>${upDisplay}</td><td>${statusBadge}</td><td>${durationDisplay}</td></tr>`;
+                let upDisplay = (event.upTime === "Ongoing / No Restoration") ? `<div class="datetime-display"><span class="badge-ongoing" style="background-color: #f59e0b; color: white; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; margin-right: 6px;">MISSING UP</span> No restoration recorded</div>` : (event.upDate === "Unknown" || event.upDate === "—") ? `<span class="text-muted"><i class="bi bi-question-circle"></i> Unknown</span>` : `<div class="datetime-display"><span class="badge-up" style="background-color: #10b981; color: white; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; margin-right: 6px;">UP</span> ${event.upDate} ${event.upTime}</div>`;
+                
+                let durationDisplay = "";
+                if (event.status === "Unknown Start") durationDisplay = `<span class="text-muted">—</span>`;
+                else if (event.status === "Ongoing") durationDisplay = `<span class="${durationClass}"><i class="bi bi-clock"></i> Not included in total (unresolved)</span>`;
+                else durationDisplay = `<span class="${durationClass}"><i class="bi bi-clock"></i> ${formatDuration(event.duration)}</span>`;
+                
+                html += `<tr>
+                            <td>${serialNo++}</td>
+                            <td><i class="bi bi-building me-1"></i> <strong>${escapeHtml(event.branch)}</strong></td>
+                            <td>${downDisplay}</td>
+                            <td>${upDisplay}</td>
+                            <td>${statusBadge}</td>
+                            <td>${durationDisplay}</td>
+                         </tr>`;
             }
             tbody.html(html);
             dataTable = $("#downtimeTable").DataTable({ paging: false, searching: true, ordering: true, info: true, language: { search: "Filter:", searchPlaceholder: "Search by treasury...", info: "Showing _START_ to _END_ of _TOTAL_ entries" }, columnDefs: [{ orderable: true, targets: [0,1,5] }, { orderable: false, targets: [2,3,4] }], order: [[0, 'asc']] });
@@ -690,9 +722,9 @@
                 "SL.no": idx + 1,
                 "Treasury / Branch": event.branch,
                 "Down Date & Time": event.downDate === "Unknown" ? "Unknown" : `${event.downDate} ${event.downTime}`,
-                "Up Date & Time": event.upTime === "Ongoing" ? "Ongoing" : (event.upDate === "—" ? "Not restored" : `${event.upDate} ${event.upTime}`),
+                "Up Date & Time": (event.upTime === "Ongoing / No Restoration") ? "No Up record" : (event.upDate === "—" ? "Not restored" : `${event.upDate} ${event.upTime}`),
                 "Status": event.status,
-                "Failure Duration": event.status === "Unknown Start" ? "—" : formatDuration(event.duration)
+                "Failure Duration (Resolved Only)": event.status === "Resolved" ? formatDuration(event.duration) : (event.status === "Ongoing" ? "Excluded (No Up Time)" : "—")
             }));
         }
 
@@ -722,51 +754,52 @@
                 idx + 1,
                 event.branch,
                 event.downDate === "Unknown" ? "Unknown" : `${event.downDate} ${event.downTime}`,
-                event.upTime === "Ongoing" ? "Ongoing" : (event.upDate === "—" ? "Not restored" : `${event.upDate} ${event.upTime}`),
+                (event.upTime === "Ongoing / No Restoration") ? "Missing Up" : (event.upDate === "—" ? "Not restored" : `${event.upDate} ${event.upTime}`),
                 event.status,
-                event.status === "Unknown Start" ? "—" : formatDuration(event.duration)
+                event.status === "Resolved" ? formatDuration(event.duration) : (event.status === "Ongoing" ? "Unresolved (excluded)" : "—")
             ]);
             const fromDate = $('#fromDate').val() || 'N/A';
             const toDate = $('#toDate').val() || 'N/A';
+            const totalResolvedSecs = currentEventsData.filter(e => e.status === "Resolved").reduce((s, e) => s + e.duration, 0);
             doc.setFontSize(16);
             doc.text("Power Down Hours Report", 14, 15);
             doc.setFontSize(10);
             doc.text(`Period: ${fromDate} to ${toDate}`, 14, 25);
+            doc.text(`Note: Only resolved incidents (with Up timestamp) contribute to total downtime.`, 14, 32);
             doc.autoTable({
-                head: [["SL.no", "Treasury / Branch", "Down Date & Time", "Up Date & Time", "Status", "Failure Duration"]],
+                head: [["SL.no", "Treasury", "Down DateTime", "Up DateTime", "Status", "Duration (Resolved Only)"]],
                 body: tableData,
-                startY: 32,
+                startY: 38,
                 theme: 'striped',
                 headStyles: { fillColor: [15, 91, 156], textColor: 255, fontStyle: 'bold' },
                 margin: { left: 10, right: 10 }
             });
             const finalY = doc.lastAutoTable.finalY + 8;
-            const totalSecs = currentEventsData.reduce((sum, e) => sum + e.duration, 0);
             doc.setFontSize(10);
-            doc.text(`Total Downtime: ${formatDuration(totalSecs)}`, 14, finalY);
+            doc.text(`Total Downtime (Resolved incidents only): ${formatDuration(totalResolvedSecs)}`, 14, finalY);
             doc.save(`power_downtime_report_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.pdf`);
         }
 
         // ======================== DATE FUNCTIONS ========================
         function setDefaultDates() {
             const now = new Date();
-            const firstDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 12, 0, 0));
-            const lastDay = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 12, 0, 0));
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
             flatpickrFrom = flatpickr("#fromDate", { dateFormat: "d/m/Y", defaultDate: firstDay });
             flatpickrTo = flatpickr("#toDate", { dateFormat: "d/m/Y", defaultDate: lastDay });
         }
         
         function setCurrentMonth() {
             const now = new Date();
-            flatpickrFrom.setDate(new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1)));
-            flatpickrTo.setDate(new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0)));
+            flatpickrFrom.setDate(new Date(now.getFullYear(), now.getMonth(), 1));
+            flatpickrTo.setDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
             generateReport();
         }
         
         function setPreviousMonth() {
             const now = new Date();
-            flatpickrFrom.setDate(new Date(Date.UTC(now.getFullYear(), now.getMonth() - 1, 1)));
-            flatpickrTo.setDate(new Date(Date.UTC(now.getFullYear(), now.getMonth(), 0)));
+            flatpickrFrom.setDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+            flatpickrTo.setDate(new Date(now.getFullYear(), now.getMonth(), 0));
             generateReport();
         }
 
