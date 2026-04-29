@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Web Scraper Logger | Monitor & Log Data to Sheets</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
+    <style>
+        :root {
+            --primary: #0f5b9c;
+            --primary-dark: #1a4b7a;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --border: #e9ecef;
+        }
+        body { background: #eef2f7; font-family: 'Segoe UI', sans-serif; padding: 24px; }
+        .container-main {  margin: 0 auto; }
+        .card-custom { background: white; border-radius: 24px; box-shadow: 0 12px 30px rgba(0,0,0,0.08); overflow: hidden; border: none; }
+        .nav-tabs-custom { background: #f8fafc; border-bottom: 1px solid var(--border); padding: 0 1.5rem; }
+        .nav-link-custom { border: none; font-weight: 600; color: #5b6e8c; padding: 1rem 1.8rem; margin-right: 0.5rem; border-radius: 0; transition: all 0.2s; }
+        .nav-link-custom i { margin-right: 8px; font-size: 1.1rem; }
+        .nav-link-custom.active { color: var(--primary); background: transparent; border-bottom: 3px solid var(--primary); }
+        .tab-pane { padding: 2rem 1.8rem; }
+        .form-label { font-weight: 600; color: #1e293b; }
+        .form-label i { color: var(--primary); margin-right: 6px; }
+        .form-control, .form-select { border-radius: 12px; border: 1px solid #cbd5e1; padding: 10px 14px; }
+        .btn-primary-custom { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); border: none; padding: 10px 24px; border-radius: 40px; font-weight: 600; color: white; }
+        .btn-primary-custom:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(15,91,156,0.3); }
+        .iframe-wrapper { background: white; border-radius: 16px; border: 1px solid var(--border); overflow: hidden; margin-top: 20px; }
+        iframe { width: 100%; height: 550px; border: none; }
+        .value-badge { background: var(--primary-light); color: var(--primary); padding: 8px 16px; border-radius: 40px; font-weight: 600; font-size: 1.2rem; font-family: monospace; }
+        .toast-notify { position: fixed; bottom: 20px; right: 20px; background: #1e293b; color: white; padding: 12px 20px; border-radius: 40px; z-index: 1100; display: flex; align-items: center; gap: 8px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+        .toast-notify.show { opacity: 1; }
+        .status-badge { padding: 4px 12px; border-radius: 40px; font-size: 0.8rem; font-weight: 600; }
+        .status-running { background: #e8f7ed; color: #0b5e42; }
+        .status-stopped { background: #fee9e7; color: #b91c1c; }
+        .manual-value-card { background: #f8fafc; border-radius: 16px; padding: 16px; border: 1px solid var(--border); margin-top: 20px; }
+        .interval-inputs { background: #f8fafc; border-radius: 16px; padding: 16px; border: 1px solid var(--border); }
+        @media (max-width: 768px) { body { padding: 16px; } .tab-pane { padding: 1.5rem; } }
+    </style>
+</head>
+<body>
+
+<div class="container-main">
+    <div class="card-custom">
+        <div class="nav-tabs-custom">
+            <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+                <li class="nav-item"><button class="nav-link nav-link-custom" id="config-tab" data-bs-toggle="tab" data-bs-target="#configPane"><i class="bi bi-gear-fill"></i> Configuration</button></li>
+                <li class="nav-item"><button class="nav-link nav-link-custom active" id="monitor-tab" data-bs-toggle="tab" data-bs-target="#monitorPane"><i class="bi bi-eye"></i> Monitor & Log</button></li>
+                <li class="nav-item"><button class="nav-link nav-link-custom" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logsPane"><i class="bi bi-table"></i> Data Logs</button></li>
+            </ul>
+        </div>
+        <div class="tab-content">
+            <!-- Configuration Tab -->
+            <div class="tab-pane fade" id="configPane" role="tabpanel">
+                <h5 class="mb-3"><i class="bi bi-sliders2"></i> Application Configuration</h5>
+                <div class="alert alert-info"><i class="bi bi-info-circle-fill"></i> Settings are saved in your browser.</div>
+                <div class="row g-4">
+                    <div class="col-12"><label class="form-label"><i class="bi bi-code-slash"></i> Apps Script URL</label><input type="url" id="cfgAppScriptUrl" class="form-control"></div>
+                    <div class="col-md-6"><label class="form-label"><i class="bi bi-key"></i> Google Sheets API Key</label><input type="text" id="cfgApiKey" class="form-control"></div>
+                    <div class="col-md-6"><label class="form-label"><i class="bi bi-table"></i> Sheet URL / ID</label><input type="text" id="cfgSheetUrl" class="form-control"></div>
+                    <div class="col-md-4"><label class="form-label"><i class="bi bi-file-spreadsheet"></i> Sheet Name</label><input type="text" id="cfgSheetName" class="form-control" value="Sheet1"></div>
+                    <div class="col-md-4"><label class="form-label"><i class="bi bi-bounding-box"></i> Data Range</label><input type="text" id="cfgDataRange" class="form-control" value="A2:D"></div>
+                    <div class="col-md-4 d-flex align-items-end"><button id="saveConfigBtn" class="btn-primary-custom w-100"><i class="bi bi-save"></i> Save Configuration</button></div>
+                </div>
+                <div class="mt-4 p-3 bg-light rounded"><strong><i class="bi bi-database-check"></i> Current Status:</strong><div id="configStatusText" class="small mt-1">Not configured</div></div>
+            </div>
+
+            <!-- Monitor Tab with Iframe -->
+            <div class="tab-pane fade show active" id="monitorPane" role="tabpanel">
+                <div class="row g-4">
+                    <div class="col-md-12">
+                        <label class="form-label"><i class="bi bi-link-45deg"></i> Target URL</label>
+                        <div class="d-flex gap-2">
+                            <input type="url" id="targetUrl" class="form-control" placeholder="https://example.com/page.html" value="https://">
+                            <button id="loadIframeBtn" class="btn-primary-custom"><i class="bi bi-arrow-repeat"></i> Load Page</button>
+                        </div>
+                        <small class="text-muted">Enter URL and click Load Page to log in and navigate inside the frame</small>
+                    </div>
+                </div>
+                
+                <div class="row g-4 mt-2">
+                    <div class="col-md-12">
+                        <label class="form-label"><i class="bi bi-code-square"></i> CSS Selector to Extract</label>
+                        <input type="text" id="elementSelector" class="form-control" placeholder='e.g., #divMemory, .memory-value'>
+                        <small class="text-muted">CSS selector for the element containing the value</small>
+                        <div class="mt-2"><button id="extractFromIframeBtn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-cursor"></i> Extract Value from Current Page</button></div>
+                    </div>
+                </div>
+                
+                <!-- Manual Value Entry (For cross-origin pages) -->
+                <div class="manual-value-card">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong><i class="bi bi-pencil-square"></i> Manual Value Entry</strong>
+                        <span class="badge bg-info">Use if auto-extraction fails</span>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-8">
+                            <input type="text" id="manualValue" class="form-control" placeholder="Paste the value here manually">
+                        </div>
+                        <div class="col-md-4">
+                            <button id="logManualValueBtn" class="btn btn-primary w-100"><i class="bi bi-send"></i> Log This Value</button>
+                        </div>
+                    </div>
+                    <small class="text-muted">If the iframe is cross-origin and you cannot auto-extract, copy-paste the value here</small>
+                </div>
+                
+                <div class="iframe-wrapper mt-4">
+                    <div class="d-flex justify-content-between p-2 border-bottom bg-light">
+                        <div><span id="frameStatus" class="badge bg-secondary">Not loaded</span></div>
+                        <button id="reloadIframeBtn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Reload Frame</button>
+                    </div>
+                    <iframe id="targetIframe" src="about:blank" title="Target Webpage" allow="clipboard-read; clipboard-write"></iframe>
+                </div>
+                
+                <div class="row g-4 mt-2">
+                    <div class="col-md-12">
+                        <label class="form-label"><i class="bi bi-clock-history"></i> Monitoring Interval</label>
+                        <div class="interval-inputs d-flex flex-wrap gap-3 align-items-end">
+                            <div style="min-width: 100px;"><label class="small">Days</label><input type="number" id="intervalDays" class="form-control" min="0" value="0" step="1"></div>
+                            <div style="min-width: 100px;"><label class="small">Hours</label><input type="number" id="intervalHours" class="form-control" min="0" max="23" value="0" step="1"></div>
+                            <div style="min-width: 100px;"><label class="small">Minutes</label><input type="number" id="intervalMinutes" class="form-control" min="1" value="5" step="1"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row g-3 mt-3">
+                    <div class="col-12 d-flex flex-wrap gap-3 justify-content-between align-items-center">
+                        <div class="d-flex gap-2">
+                            <button id="startBtn" class="btn-primary-custom"><i class="bi bi-play-fill"></i> Start Monitoring</button>
+                            <button id="pauseBtn" class="btn-warning-custom" disabled><i class="bi bi-pause-fill"></i> Pause</button>
+                            <button id="stopBtn" class="btn-danger-custom" disabled><i class="bi bi-stop-fill"></i> Stop</button>
+                        </div>
+                        <div>
+                            <span id="statusBadge" class="status-badge status-stopped"><i class="bi bi-stop-circle"></i> Stopped</span>
+                            <span id="lastValueDisplay" class="value-badge ms-2"><i class="bi bi-graph-up"></i> Last value: —</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div class="tab-pane fade" id="logsPane" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                    <h5 class="mb-0"><i class="bi bi-database"></i> Captured Values</h5>
+                    <button id="refreshTableBtn" class="btn-primary-custom"><i class="bi bi-arrow-repeat"></i> Refresh</button>
+                </div>
+                <div class="table-responsive">
+                    <table id="logsTable" class="table table-striped table-hover" style="width:100%">
+                        <thead><tr><th>Date</th><th>Time</th><th>Element Selector</th><th>Value</th></tr></thead>
+                        <tbody><tr><td colspan="4" class="text-center text-muted">Click Refresh to load data</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="toastMsg" class="toast-notify"><i class="bi bi-info-circle-fill"></i> <span>Message</span></div>
+
+<script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+let config = { appScriptUrl: '', apiKey: '', sheetUrl: '', sheetName: 'Sheet1', dataRange: 'A2:D' };
+let monitoringIntervalId = null;
+let isMonitoring = false;
+let isPaused = false;
+let currentSelector = '';
+let dataTable = null;
+
+// Load config from localStorage
+function loadConfigFromStorage() {
+    const saved = localStorage.getItem('webScraperConfig');
+    if (saved) { try { Object.assign(config, JSON.parse(saved)); } catch(e) {} }
+    $('#cfgAppScriptUrl').val(config.appScriptUrl);
+    $('#cfgApiKey').val(config.apiKey);
+    $('#cfgSheetUrl').val(config.sheetUrl);
+    $('#cfgSheetName').val(config.sheetName);
+    $('#cfgDataRange').val(config.dataRange);
+    updateConfigStatusText();
+}
+function saveConfigToStorage() {
+    config.appScriptUrl = $('#cfgAppScriptUrl').val().trim();
+    config.apiKey = $('#cfgApiKey').val().trim();
+    config.sheetUrl = $('#cfgSheetUrl').val().trim();
+    config.sheetName = $('#cfgSheetName').val().trim();
+    config.dataRange = $('#cfgDataRange').val().trim();
+    localStorage.setItem('webScraperConfig', JSON.stringify(config));
+    updateConfigStatusText();
+    showToast('Configuration saved!', 'success');
+}
+function updateConfigStatusText() {
+    let status = '';
+    if (config.appScriptUrl) status += `✅ Apps Script URL set<br>`;
+    else status += `❌ Apps Script URL missing<br>`;
+    if (config.apiKey) status += `✅ API Key set<br>`;
+    else status += `❌ API Key missing<br>`;
+    if (config.sheetUrl) status += `✅ Sheet URL set<br>`;
+    else status += `❌ Sheet URL missing`;
+    $('#configStatusText').html(status);
+}
+function showToast(message, type = 'info') {
+    const toastDiv = $('#toastMsg');
+    const icon = type === 'success' ? 'bi-check-circle-fill' : (type === 'error' ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill');
+    toastDiv.html(`<i class="bi ${icon}"></i> <span>${message}</span>`);
+    toastDiv.addClass('show');
+    setTimeout(() => toastDiv.removeClass('show'), 4000);
+}
+
+// Iframe functions
+function loadIframe() {
+    const url = $('#targetUrl').val().trim();
+    if (!url) { showToast('Please enter a URL', 'warning'); return; }
+    $('#targetIframe').attr('src', url);
+    $('#frameStatus').text('Loading...').removeClass('bg-secondary').addClass('bg-warning');
+    showToast('Page loading in iframe...', 'info');
+}
+
+// Try to extract value from iframe (works only for same-origin)
+function extractFromIframe() {
+    const selector = $('#elementSelector').val().trim();
+    if (!selector) { showToast('Please enter a selector', 'warning'); return; }
+    currentSelector = selector;
+    
+    try {
+        const iframe = document.getElementById('targetIframe');
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        const element = iframeDoc.querySelector(selector);
+        if (element) {
+            let value = element.textContent || element.innerText || '';
+            value = value.trim();
+            showToast(`Found value: ${value}`, 'success');
+            $('#lastValueDisplay').html(`<i class="bi bi-graph-up"></i> Last value: ${value}`);
+            return value;
+        } else {
+            showToast(`Element "${selector}" not found`, 'error');
+            $('#lastValueDisplay').html(`<i class="bi bi-exclamation-triangle"></i> Not found`);
+            return null;
+        }
+    } catch (e) {
+        showToast(`Cannot access iframe content: Cross-origin restriction. Use manual entry.`, 'error');
+        console.warn('Cross-origin error:', e);
+        return null;
+    }
+}
+
+// Manual value logging
+async function logManualValue() {
+    const value = $('#manualValue').val().trim();
+    if (!value) { showToast('Please enter a value', 'warning'); return; }
+    if (!config.appScriptUrl) { showToast('Please configure Apps Script URL', 'error'); return; }
+    
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-GB');
+    const timeStr = now.toLocaleTimeString('en-GB');
+    const selector = $('#elementSelector').val().trim() || 'manual';
+    
+    const payload = { date: dateStr, time: timeStr, selector: selector, value: value, timestamp: now.toISOString() };
+    
+    try {
+        await fetch(config.appScriptUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        showToast(`Logged: ${value}`, 'success');
+        $('#lastValueDisplay').html(`<i class="bi bi-graph-up"></i> Last value: ${value}`);
+        $('#manualValue').val('');
+    } catch (err) { showToast('Failed to log', 'error'); }
+}
+
+async function sendToSheet(value) {
+    if (!config.appScriptUrl) return false;
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-GB');
+    const timeStr = now.toLocaleTimeString('en-GB');
+    const payload = { date: dateStr, time: timeStr, selector: currentSelector, value: value, timestamp: now.toISOString() };
+    try {
+        await fetch(config.appScriptUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        return true;
+    } catch(err) { return false; }
+}
+
+async function performMonitoring() {
+    if (!currentSelector) { showToast('Please set a selector first', 'warning'); return; }
+    
+    // Try auto-extract first
+    let value = null;
+    try {
+        const iframe = document.getElementById('targetIframe');
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        const element = iframeDoc.querySelector(currentSelector);
+        if (element) value = element.textContent || element.innerText || '';
+        if (value) value = value.trim();
+    } catch(e) { console.log('Cross-origin, skipping auto-extract'); }
+    
+    if (!value) {
+        showToast(`Auto-extract failed. Please use manual entry for this page.`, 'warning');
+        return;
+    }
+    
+    await sendToSheet(value);
+    $('#lastValueDisplay').html(`<i class="bi bi-graph-up"></i> Last value: ${value}`);
+    showToast(`Logged: ${value}`, 'success');
+}
+
+function scheduleNextRun() {
+    if (!isMonitoring || isPaused) return;
+    let days = parseInt($('#intervalDays').val()) || 0;
+    let hours = parseInt($('#intervalHours').val()) || 0;
+    let minutes = parseInt($('#intervalMinutes').val()) || 1;
+    if (days === 0 && hours === 0 && minutes === 0) minutes = 1;
+    const totalMs = ((days * 24 + hours) * 60 + minutes) * 60 * 1000;
+    if (monitoringIntervalId) clearTimeout(monitoringIntervalId);
+    monitoringIntervalId = setTimeout(async () => {
+        if (isMonitoring && !isPaused) { await performMonitoring(); scheduleNextRun(); }
+    }, totalMs);
+}
+
+function startMonitoring() {
+    if (isMonitoring && !isPaused) { showToast('Already running', 'warning'); return; }
+    if (!config.appScriptUrl) { showToast('Configure Apps Script URL first', 'error'); return; }
+    currentSelector = $('#elementSelector').val().trim();
+    if (!currentSelector) { showToast('Please enter a selector', 'warning'); return; }
+    if (monitoringIntervalId) clearTimeout(monitoringIntervalId);
+    isMonitoring = true;
+    isPaused = false;
+    performMonitoring().then(() => scheduleNextRun());
+    updateButtonsState();
+    $('#statusBadge').html('<i class="bi bi-play-circle"></i> Running').removeClass('status-stopped').addClass('status-running');
+}
+
+function pauseMonitoring() {
+    if (!isMonitoring || isPaused) return;
+    isPaused = true;
+    if (monitoringIntervalId) clearTimeout(monitoringIntervalId);
+    updateButtonsState();
+    $('#statusBadge').html('<i class="bi bi-pause-circle"></i> Paused');
+    showToast('Monitoring paused', 'info');
+}
+
+function stopMonitoring() {
+    isMonitoring = false;
+    isPaused = false;
+    if (monitoringIntervalId) clearTimeout(monitoringIntervalId);
+    updateButtonsState();
+    $('#statusBadge').html('<i class="bi bi-stop-circle"></i> Stopped').removeClass('status-running').addClass('status-stopped');
+    showToast('Monitoring stopped', 'info');
+}
+
+function updateButtonsState() {
+    const running = isMonitoring && !isPaused;
+    $('#startBtn').prop('disabled', running);
+    $('#pauseBtn').prop('disabled', !running);
+    $('#stopBtn').prop('disabled', !isMonitoring);
+}
+
+async function loadLogsFromSheet() {
+    if (!config.apiKey || !config.sheetUrl) { showToast('Missing API key or Sheet URL', 'error'); return; }
+    let sheetIdMatch = config.sheetUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (!sheetIdMatch) { showToast('Invalid sheet URL', 'error'); return; }
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetIdMatch[1]}/values/${config.sheetName}!${config.dataRange}?key=${config.apiKey}`;
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (!data.values || data.values.length === 0) { if (dataTable) dataTable.clear().draw(); $('#logsTable tbody').html('<tr><td colspan="4" class="text-center">No records</td></tr>'); return; }
+        const rows = data.values.map(row => ({ date: row[0] || '', time: row[1] || '', selector: row[2] || '', value: row[3] || '' }));
+        if ($.fn.DataTable.isDataTable('#logsTable')) dataTable.destroy();
+        dataTable = $('#logsTable').DataTable({ data: rows, columns: [{ data: "date" }, { data: "time" }, { data: "selector" }, { data: "value" }], pageLength: 25, order: [[0, 'desc'], [1, 'desc']] });
+    } catch(err) { showToast('Failed to load sheet', 'error'); }
+}
+
+$(document).ready(function() {
+    loadConfigFromStorage();
+    $('#saveConfigBtn').on('click', saveConfigToStorage);
+    $('#loadIframeBtn').on('click', loadIframe);
+    $('#extractFromIframeBtn').on('click', extractFromIframe);
+    $('#logManualValueBtn').on('click', logManualValue);
+    $('#reloadIframeBtn').on('click', function() { $('#targetIframe').attr('src', $('#targetIframe').attr('src')); });
+    $('#startBtn').on('click', startMonitoring);
+    $('#pauseBtn').on('click', pauseMonitoring);
+    $('#stopBtn').on('click', stopMonitoring);
+    $('#refreshTableBtn').on('click', loadLogsFromSheet);
+    $('#logs-tab').on('shown.bs.tab', loadLogsFromSheet);
+    
+    $('#targetIframe').on('load', function() { 
+        $('#frameStatus').text('Loaded').removeClass('bg-warning').addClass('bg-success'); 
+        setTimeout(() => $('#frameStatus').text('Loaded').removeClass('bg-success').addClass('bg-secondary'), 2000);
+    });
+});
+</script>
+</body>
+</html>

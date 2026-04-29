@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="../css/select2-bootstrap-5-theme.min.css">
     <!-- Flatpickr CSS -->
     <link rel="stylesheet" href="../css/flatpickr.min.css">
-	<link rel="stylesheet" href="../css/sweetalert2.min.css">
+    <link rel="stylesheet" href="../css/sweetalert2.min.css">
     
     <style>
         * { box-sizing: border-box; }
@@ -159,6 +159,33 @@
             border-radius: 12px;
             overflow: hidden;
         }
+        /* Confirmation popup styles */
+        .confirm-details {
+            text-align: left;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 16px;
+        }
+        .confirm-details p {
+            margin: 10px 0;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .confirm-details p strong {
+            min-width: 100px;
+            color: #0f3b5f;
+        }
+        .confirm-status-up {
+            color: #10b981;
+            font-weight: bold;
+        }
+        .confirm-status-down {
+            color: #ef4444;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -174,7 +201,6 @@
             <div class="col-md-6">
                 <label class="form-label required">Treasury / Branch</label>
                 <select id="branchSelect" class="form-select" style="width:100%"></select>
-               
             </div>
             <div class="col-md-6">
                 <label class="form-label required">Date</label>
@@ -187,7 +213,8 @@
             <div class="col-md-6">
                 <label class="form-label required">Power Status</label>
                 <select id="powerStatus" class="form-select">
-                    <option value="Down" selected>🔴 Down (Failure)</option>
+                    <option value="" selected disabled>-- Select Status --</option>
+                    <option value="Down">🔴 Down (Failure)</option>
                     <option value="Up">🟢 Up (Restored)</option>
                 </select>
             </div>
@@ -195,7 +222,6 @@
                 <button id="submitPowerBtn" class="btn btn-primary-custom px-4"><i class="bi bi-save"></i> Submit</button>
             </div>
         </div>
-      <!--   <hr class="my-4"> -->
     </div>
 
     <!-- Tab 2: Edit / DataTable -->
@@ -220,8 +246,7 @@
             </table>
         </div>
     </div>
-</div><!-- 
-<footer> <i class="bi bi-shield-check"></i> Power Uptime Manager | SDWAN Treasury</footer>
+</div>
 
 <!-- Edit Modal -->
 <div class="modal fade" id="editEventModal" tabindex="-1" aria-hidden="true">
@@ -249,6 +274,7 @@
                 <div class="mb-3">
                     <label class="form-label">Power Status</label>
                     <select id="editStatus" class="form-select">
+                        <option value="">Choose Status</option>
                         <option value="Down">Down (Failure)</option>
                         <option value="Up">Up (Restored)</option>
                     </select>
@@ -415,6 +441,35 @@
         if(dataTable) dataTable.column(1).search(branchVal).draw();
     });
 
+    // ================ SHOW CONFIRMATION POPUP ================
+    function showConfirmationPopup(branch, date, time, status) {
+        const statusIcon = status === "Up" ? "🟢" : "🔴";
+        const statusClass = status === "Up" ? "confirm-status-up" : "confirm-status-down";
+        const statusText = status === "Up" ? "Up (Restored)" : "Down (Failure)";
+        
+        return Swal.fire({
+            title: '<i class="bi bi-check-circle-fill" style="color:#0f3b5f;"></i> Confirm Power Event',
+            html: `
+                <div class="confirm-details">
+                    <p><strong><i class="bi bi-building"></i> Branch:</strong> <span>${escapeHtml(branch)}</span></p>
+                    <p><strong><i class="bi bi-calendar"></i> Date:</strong> <span>${escapeHtml(date)}</span></p>
+                    <p><strong><i class="bi bi-clock"></i> Time:</strong> <span>${escapeHtml(time)}</span></p>
+                    <p><strong><i class="bi bi-lightning-charge"></i> Status:</strong> <span class="${statusClass}">${statusIcon} ${statusText}</span></p>
+                </div>
+                <p style="margin-top:15px;color:#64748b;">Please verify the details before submitting.</p>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#0f3b5f',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: '<i class="bi bi-check-lg"></i> Confirm & Submit',
+            cancelButtonText: '<i class="bi bi-x-lg"></i> Cancel',
+            reverseButtons: false,
+            backdrop: true,
+            allowOutsideClick: false
+        });
+    }
+
     // ================ SUBMIT POWER EVENT ================
     async function submitPowerEvent() {
         const branch = $("#branchSelect").val();
@@ -422,13 +477,19 @@
             Swal.fire({ icon: 'warning', title: 'Missing Field', text: 'Please select a Treasury/Branch', confirmButtonColor: '#0f3b5f' });
             return;
         }
+        
         const dateVal = document.getElementById("eventDate").value;
         const timeVal = document.getElementById("eventTime").value;
         if(!dateVal || !timeVal) {
             Swal.fire({ icon: 'warning', title: 'Missing Fields', text: 'Date and Time are required', confirmButtonColor: '#0f3b5f' });
             return;
         }
+        
         const status = $("#powerStatus").val();
+        if(!status) {
+            Swal.fire({ icon: 'warning', title: 'Missing Status', text: 'Please select a Power Status (Up/Down)', confirmButtonColor: '#0f3b5f' });
+            return;
+        }
         
         let dateParts = dateVal.split('/');
         if(dateParts.length !== 3) {
@@ -436,6 +497,28 @@
             return;
         }
         
+        // Validate date is real
+        const testDate = new Date(dateParts[2], dateParts[1]-1, dateParts[0]);
+        if(testDate.getDate() != dateParts[0] || testDate.getMonth() != dateParts[1]-1) {
+            Swal.fire({ icon: 'error', title: 'Invalid Date', text: 'Please enter a valid date', confirmButtonColor: '#0f3b5f' });
+            return;
+        }
+        
+        // Validate time format (HH:MM:SS)
+        const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
+        if(!timeRegex.test(timeVal)) {
+            Swal.fire({ icon: 'error', title: 'Invalid Time', text: 'Use HH:MM:SS format (e.g., 14:30:00)', confirmButtonColor: '#0f3b5f' });
+            return;
+        }
+        
+        // Show confirmation popup
+        const result = await showConfirmationPopup(branch, dateVal, timeVal, status);
+        
+        if (!result.isConfirmed) {
+            return; // User cancelled
+        }
+        
+        // Proceed with submission
         let isoDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}T${timeVal}`;
         const timestampISO = new Date(isoDate).toISOString();
         
@@ -447,10 +530,21 @@
         
         try {
             await fetch(APPS_SCRIPT_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-            Swal.fire({ icon: 'success', title: 'Success!', text: 'Power event added successfully', timer: 2000, showConfirmButton: false });
+            
+            Swal.fire({ 
+                icon: 'success', 
+                title: 'Success!', 
+                text: 'Power event added successfully', 
+                timer: 2000, 
+                showConfirmButton: false,
+                backdrop: true
+            });
+            
+            // Reset form but keep branch selection
             document.getElementById("eventDate").value = formatDateDMY(new Date());
             document.getElementById("eventTime").value = formatTimeHHMMSS(new Date());
-            $("#powerStatus").val("Down");
+            $("#powerStatus").val(""); // Reset to blank/default
+            
             setTimeout(() => { loadPowerDataAndRender(); }, 800);
         } catch(err) {
             console.error(err);
@@ -592,6 +686,11 @@
             Swal.fire({ icon: 'warning', title: 'Incomplete', text: 'Date and time required', confirmButtonColor: '#0f3b5f' });
             return;
         }
+        if(!newStatus) {
+            Swal.fire({ icon: 'warning', title: 'Missing Status', text: 'Please select a power status', confirmButtonColor: '#0f3b5f' });
+            return;
+        }
+        
         let parts = newDate.split('/');
         let isoString = `${parts[2]}-${parts[1]}-${parts[0]}T${newTime}`;
         const updatedISO = new Date(isoString).toISOString();

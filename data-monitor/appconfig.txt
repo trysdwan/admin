@@ -1,0 +1,5 @@
+1. App script url : https://script.google.com/macros/s/AKfycbwwDk0uEt5HpWCZ6LLanTPBlQnZQ4qq2nyfeX4lGlgV3U7Sh8apiEbic8_DwxWU6NVc/exec
+2. Api key : AIzaSyBB1V3vJpNZ9X1GIF-YOwoa6YSt_iXMLo0
+3. Sheet url : https://docs.google.com/spreadsheets/d/1lKOxplbRL6mNj-t36g9OJKoJv3xBO-37-2BYUAvJrOY/edit?gid=0#gid=0
+4. Sheet name : Sheet1
+5. Data range: A2:D
