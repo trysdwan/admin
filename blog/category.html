@@ -1,0 +1,300 @@
+<!-- category.html - Filter posts by category with URL Parameter Support -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Category - Blog Posts</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/bootstrap-icons.min.css">
+    <!-- Custom Blog CSS -->
+    <link rel="stylesheet" href="css/blog.css">
+</head>
+<body>
+
+<header id="main-header"></header>
+
+<div class="category-header text-center">
+    <div class="container">
+        <i class="bi bi-tag-fill fs-1 mb-2 d-inline-block"></i>
+        <h1 class="display-5 fw-bold" id="categoryTitle">Loading...</h1>
+        <p class="lead opacity-75" id="postCount"></p>
+    </div>
+</div>
+
+<main class="container py-4">
+    <div class="row g-4" id="postsGrid"></div>
+    <div id="loadMoreTrigger" class="load-more-trigger">
+        <button class="btn btn-outline-primary rounded-pill px-4" id="loadMoreBtn">Load more</button>
+    </div>
+    <div id="noMoreMsg" class="text-center text-muted small d-none">✨ No more posts</div>
+</main>
+
+<footer class="py-4 mt-5">
+    <div class="container text-center text-muted small">
+        <i class="bi bi-dot"></i> Powered by IT Cell Treasury
+    </div>
+</footer>
+
+<script src="js/bootstrap.bundle.min.js"></script>
+<script src="config.js"></script>
+<script>
+    let allPosts = [];
+    let currentCategory = '';
+    let currentLimit = 6;
+    
+    function extractFirstImage(html) {
+        if (!html) return 'https://placehold.co/600x400/e2e8f0/64748b?text=No+Image';
+        const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+        return match ? match[1] : 'https://placehold.co/600x400/e2e8f0/64748b?text=Blog+Image';
+    }
+    
+    function stripHtml(html) {
+        let temp = document.createElement("div");
+        temp.innerHTML = html;
+        return temp.textContent || temp.innerText || "";
+    }
+    
+    // Get the current page URL with category parameter
+    function getCurrentPageUrl(category) {
+        const baseUrl = window.location.href.split('?')[0];
+        return `${baseUrl}?category=${encodeURIComponent(category)}`;
+    }
+    
+    // Update browser URL without reloading the page
+    function updateBrowserUrl(category) {
+        const newUrl = getCurrentPageUrl(category);
+        window.history.pushState({ category: category }, '', newUrl);
+        console.log('Category URL updated to:', newUrl);
+    }
+    
+    // Extract category from URL parameters
+    function getCategoryFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlCategory = urlParams.get('category');
+        if (urlCategory && urlCategory.trim()) {
+            return decodeURIComponent(urlCategory);
+        }
+        return null;
+    }
+    
+    function navigateToPost(postId) {
+        // Store post ID and navigate to post.html with URL parameter
+        window.location.href = `post.html?id=${postId}`;
+    }
+    
+    // Navigate back to homepage
+    function navigateToHome() {
+        window.location.href = 'index.html';
+    }
+    
+    async function loadHeaderConfig() {
+        try {
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/configure!A:F?key=${CONFIG.API_KEY}`;
+            const resp = await fetch(url);
+            const data = await resp.json();
+            const rows = data.values || [];
+            let blogTitle = "Blog Studio", logoUrl = "";
+            let menuItems = [];
+            for(let i=1; i<rows.length; i++) {
+                let row = rows[i];
+                let item = row[0]?.trim(), configVal = row[1]?.trim(), menu = row[2]?.trim(), sub = row[3]?.trim(), linkItem = row[4]?.trim(), link = row[5]?.trim();
+                if(item === "Blog Title" && configVal) blogTitle = configVal;
+                if(item === "Blog logo(url)" && configVal) logoUrl = configVal;
+                if(menu && menu !== "Menu") {
+                    let existing = menuItems.find(m => m.name === menu);
+                    if(!existing) {
+                        existing = { name: menu, subItems: [] };
+                        menuItems.push(existing);
+                    }
+                    if(sub && sub !== "Sub Menu" && linkItem && link) {
+                        existing.subItems.push({ label: sub, url: link });
+                    } else if (linkItem && link && (!sub || sub === "Sub Menu")) {
+                        existing.subItems.push({ label: linkItem, url: link });
+                    }
+                }
+            }
+            renderHeader(blogTitle, logoUrl, menuItems);
+        } catch(e) { renderHeader("Blog Studio", "", []); }
+    }
+    
+    function renderHeader(title, logoUrl, menus) {
+        let logoHtml = logoUrl ? `<img src="${logoUrl}" height="35" alt="logo">` : `<i class="bi bi-journal-bookmark-fill fs-3" style="color:#4f46e5"></i>`;
+        let navHtml = `<nav class="navbar navbar-expand-lg bg-white border-bottom sticky-top px-3 px-md-5 py-2 shadow-sm">
+            <div class="container-fluid">
+                <a class="navbar-brand fw-bold" href="./index.html">${logoHtml} ${title}</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#blogNavbar">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="blogNavbar">
+                    <ul class="navbar-nav ms-auto mb-2 mb-lg-0 gap-2">`;
+        menus.forEach(menu => {
+            if(menu.subItems.length) {
+                navHtml += `<li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">${menu.name}</a><ul class="dropdown-menu">`;
+                menu.subItems.forEach(sub => { navHtml += `<li><a class="dropdown-item" href="${sub.url}">${sub.label}</a></li>`; });
+                navHtml += `</ul></li>`;
+            } else {
+                navHtml += `<li class="nav-item"><a class="nav-link" href="#">${menu.name}</a></li>`;
+            }
+        });
+        navHtml += `</ul></div></div></nav>`;
+        document.getElementById('main-header').innerHTML = navHtml;
+    }
+    
+    async function fetchPostsByCategory(category) {
+        const blogUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/blog%20data!A:I?key=${CONFIG.API_KEY}`;
+        const response = await fetch(blogUrl);
+        const data = await response.json();
+        const rows = data.values || [];
+        if(rows.length < 2) return [];
+        
+        const posts = [];
+        for(let i=1; i<rows.length; i++) {
+            let row = rows[i];
+            let postCategory = row[1] || "General";
+            if(postCategory.toLowerCase() === category.toLowerCase()) {
+                posts.push({
+                    id: row[0],
+                    category: postCategory,
+                    tags: row[2] || "",
+                    author: row[3] || "Admin",
+                    publishedTime: row[4] || "",
+                    title: row[5] || "Untitled",
+                    content: row[6] || "",
+                    likeCount: parseInt(row[7]) || 0,
+                    shareCount: parseInt(row[8]) || 0,
+                    image: extractFirstImage(row[6] || "")
+                });
+            }
+        }
+        posts.sort((a,b) => parseInt(b.id) - parseInt(a.id));
+        return posts;
+    }
+    
+    function renderPosts(postsToShow) {
+        const container = document.getElementById("postsGrid");
+        if (!container) return;
+        
+        if (postsToShow.length === 0) {
+            container.innerHTML = `<div class="col-12 text-center p-5">
+                <div class="alert alert-info">No posts found in "${escapeHtml(currentCategory)}" category.</div>
+                <button class="btn btn-primary-custom mt-2" onclick="navigateToHome()">
+                    <i class="bi bi-house"></i> Back to Home
+                </button>
+            </div>`;
+            return;
+        }
+        
+        container.innerHTML = postsToShow.map(p => `
+            <div class="col-md-4 col-lg-3">
+                <div class="card-blog h-100 p-3" onclick="navigateToPost('${p.id}')">
+                    <img src="${p.image}" class="card-img-top rounded-3" style="height:180px; object-fit:cover;" onerror="this.src='https://placehold.co/600x400/e2e8f0/64748b?text=No+Image'">
+                    <div class="card-body px-0 mt-2">
+                        <span class="category-badge">${escapeHtml(p.category)}</span>
+                        <h5 class="fw-bold mt-2">${escapeHtml(p.title)}</h5>
+                        <div class="small text-muted"><i class="bi bi-person-circle"></i> ${escapeHtml(p.author)} · ${escapeHtml(p.publishedTime)}</div>
+                        <p class="mt-2 small text-secondary">${escapeHtml(stripHtml(p.content).substring(0,100))}...</p>
+                        <button class="btn btn-primary-custom mt-2 w-100">Read more →</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    function loadMorePosts() {
+        currentLimit += 6;
+        const postsToShow = allPosts.slice(0, currentLimit);
+        renderPosts(postsToShow);
+        
+        if(currentLimit >= allPosts.length) {
+            const loadMoreBtn = document.getElementById("loadMoreBtn");
+            const noMoreMsg = document.getElementById("noMoreMsg");
+            if (loadMoreBtn) loadMoreBtn.style.display = "none";
+            if (noMoreMsg) noMoreMsg.classList.remove("d-none");
+        }
+    }
+    
+    function escapeHtml(str) { 
+        if(!str) return ''; 
+        return str.replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m] || m));
+    }
+    
+    async function initCategoryPage() {
+        await loadHeaderConfig();
+        
+        // Priority 1: Check URL parameters for category
+        let category = getCategoryFromUrl();
+        
+        // Priority 2: If no category in URL, check localStorage
+        if (!category) {
+            category = localStorage.getItem('selectedCategory');
+        }
+        
+        currentCategory = category;
+        
+        if(!currentCategory) {
+            document.getElementById("categoryTitle").innerHTML = 'No Category Selected';
+            document.getElementById("postsGrid").innerHTML = `<div class="col-12 text-center p-5">
+                <div class="alert alert-warning">No category selected.</div>
+                <button class="btn btn-primary-custom mt-2" onclick="navigateToHome()">
+                    <i class="bi bi-house"></i> Go back home
+                </button>
+            </div>`;
+            document.getElementById("loadMoreTrigger").style.display = "none";
+            return;
+        }
+        
+        // Update URL with category parameter
+        updateBrowserUrl(currentCategory);
+        
+        // Update page title and header
+        document.title = `${currentCategory} | Blog Studio`;
+        document.getElementById("categoryTitle").innerHTML = escapeHtml(currentCategory);
+        
+        // Fetch posts for this category
+        allPosts = await fetchPostsByCategory(currentCategory);
+        document.getElementById("postCount").innerHTML = `${allPosts.length} post${allPosts.length !== 1 ? 's' : ''}`;
+        
+        if(allPosts.length === 0) {
+            renderPosts([]);
+            document.getElementById("loadMoreTrigger").style.display = "none";
+            return;
+        }
+        
+        // Render initial posts
+        renderPosts(allPosts.slice(0, currentLimit));
+        
+        // Setup load more button
+        const loadMoreBtn = document.getElementById("loadMoreBtn");
+        if (loadMoreBtn) {
+            loadMoreBtn.onclick = loadMorePosts;
+        }
+        
+        // Hide load more button if all posts are shown
+        if(allPosts.length <= currentLimit) {
+            if (loadMoreBtn) loadMoreBtn.style.display = "none";
+            const noMoreMsg = document.getElementById("noMoreMsg");
+            if (noMoreMsg) noMoreMsg.classList.remove("d-none");
+        }
+    }
+    
+    // Make functions global for onclick handlers
+    window.navigateToPost = navigateToPost;
+    window.navigateToHome = navigateToHome;
+    
+    // Handle browser back/forward buttons
+    window.addEventListener('popstate', function(event) {
+        const category = getCategoryFromUrl();
+        if (category && category !== currentCategory) {
+            // Reload the page with the new category
+            window.location.reload();
+        } else if (!category) {
+            // No category in URL, go back to home
+            navigateToHome();
+        }
+    });
+    
+    initCategoryPage();
+</script>
+</body>
+</html>

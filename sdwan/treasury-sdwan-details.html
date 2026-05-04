@@ -233,7 +233,7 @@
 </head>
 <body>
     <div class="main-container">
-        <!-- Header 
+        <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2 style="color: #1a4b7a; font-weight: 700;">
                 <i class="bi bi-hdd-stack-fill me-2" style="color: #0f5b9c;"></i>
@@ -264,6 +264,30 @@
                         </div>
                     </div>
                     
+                    <!-- WAN 1 MPLS Configuration Section -->
+                    <div class="section-title">
+                        <i class="bi bi-diagram-3-fill"></i>
+                        WAN 1 (BSNL MPLS) Configuration Details
+                    </div>
+                    <div id="mplsConfigTableContainer" class="table-container mb-4">
+                        <div class="empty-state">
+                            <i class="bi bi-arrow-up-circle"></i>
+                            <h6>Select a treasury to view MPLS configuration</h6>
+                        </div>
+                    </div>
+                    
+                    <!-- WAN 2 Configuration Section (New) -->
+                    <div class="section-title">
+                        <i class="bi bi-hdd-network-fill"></i>
+                        WAN 2 Configuration Details
+                    </div>
+                    <div id="wan2ConfigTableContainer" class="table-container mb-4">
+                        <div class="empty-state">
+                            <i class="bi bi-arrow-up-circle"></i>
+                            <h6>Select a treasury to view WAN 2 configuration</h6>
+                        </div>
+                    </div>
+                    
                     <!-- Installation Status Section -->
                     <div class="section-title">
                         <i class="bi bi-tools"></i>
@@ -273,18 +297,6 @@
                         <div class="empty-state">
                             <i class="bi bi-arrow-up-circle"></i>
                             <h6>Select a treasury and click "View"</h6>
-                        </div>
-                    </div>
-                    
-                    <!-- MPLS Configuration Section -->
-                    <div class="section-title">
-                        <i class="bi bi-diagram-3-fill"></i>
-                        BSNL MPLS Configuration Details
-                    </div>
-                    <div id="mplsConfigTableContainer" class="table-container mb-4">
-                        <div class="empty-state">
-                            <i class="bi bi-arrow-up-circle"></i>
-                            <h6>Select a treasury to view MPLS configuration</h6>
                         </div>
                     </div>
                     
@@ -323,6 +335,8 @@
         const API_KEY = "AIzaSyBB1V3vJpNZ9X1GIF-YOwoa6YSt_iXMLo0";
         const SPREADSHEET_ID = "1HvCqLHC8IyllKskBXX1MtMfjQMGUyhMP7KuTuJxDhmU";
         const TREASURIES_SPREADSHEET_ID = "105FU8biUFJETqboPumblZ1BJYv7TzKiOy7Jwfbn3zTw";
+        const WAN2_SPREADSHEET_ID = "1q70H2WSERyz_agwb0ZirYzs2MhAO1sIB7GKlAGxvtUo";  // New WAN2 sheet ID
+        const WAN2_SHEET_NAME = "WAN2 Details";  // Sheet name for WAN2
         
         const SHEET_INSTALLATION = "Installation Status";
         const SHEET_WORKING = "Working Status";
@@ -335,51 +349,37 @@
         let workingData = [];
         let adminData = [];
         let mplsData = [];
-        let treasuriesData = []; // Store LAN Pool and Gateway data
+        let treasuriesData = [];
+        let wan2Data = [];          // Store WAN2 configuration data
+        let wan2Headers = [];
         let treasuryList = [];
         let workingHeaders = [];
         let adminHeaders = [];
         let mplsHeaders = [];
         
         // =============================================
-        // INITIALIZATION
+        // INITIALIZATION - Load treasury list first
         // =============================================
         $(document).ready(function() {
-            console.log("Dashboard initialized");
-            
-            // Load all sheet data
-            loadAllSheets();
+            console.log("Dashboard initialized - loading treasury list first");
+            // Load only installation sheet first to get treasury list quickly
+            loadTreasuryListOnly();
         });
         
-        // =============================================
-        // LOAD ALL SHEETS DATA
-        // =============================================
-        async function loadAllSheets() {
+        // Load just installation sheet to populate treasury dropdown immediately
+        async function loadTreasuryListOnly() {
             try {
-                await Promise.all([
-                    loadInstallationSheet(),
-                    loadWorkingSheet(),
-                    loadAdminSheet(),
-                    loadMplsSheet(),
-                    loadTreasuriesSheet()
-                ]);
-                
-                console.log("=== DATA LOAD SUMMARY ===");
-                console.log("Installation Status:", installationData.length, "rows");
-                console.log("Working Status:", workingData.length, "rows");
-                console.log("Admin Contact:", adminData.length, "rows");
-                console.log("MPLS Devices:", mplsData.length, "rows");
-                console.log("Treasuries Data:", treasuriesData.length, "rows");
-                
-                populateTreasurySelect();
-                
+                await loadInstallationSheetOnly();
+                // After treasury list is populated, load remaining data in background
+                loadRemainingSheetsInBackground();
             } catch (error) {
-                console.error("Error loading sheets:", error);
-                showError("Failed to load data. Please check your API key and sheet permissions.");
+                console.error("Error loading treasury list:", error);
+                $('#treasurySelect').html('<option value="">Error loading treasuries</option>');
+                showError("Failed to load treasury list. Please check API key and sheet permissions.");
             }
         }
         
-        function loadInstallationSheet() {
+        function loadInstallationSheetOnly() {
             const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_INSTALLATION)}?key=${API_KEY}`;
             
             return fetch(url)
@@ -395,92 +395,94 @@
                                 }
                             }
                             treasuryList = [...new Set(treasuryList)].sort();
-                            console.log("Treasury List Count:", treasuryList.length);
+                            console.log("Treasury List Count (from Installation):", treasuryList.length);
+                            populateTreasurySelect();
                         }
+                    } else {
+                        $('#treasurySelect').html('<option value="">No treasuries found</option>');
                     }
                 });
+        }
+        
+        async function loadRemainingSheetsInBackground() {
+            try {
+                await Promise.all([
+                    loadWorkingSheet(),
+                    loadAdminSheet(),
+                    loadMplsSheet(),
+                    loadTreasuriesSheet(),
+                    loadWan2Sheet()   // Load new WAN2 sheet
+                ]);
+                console.log("=== BACKGROUND DATA LOAD COMPLETE ===");
+                console.log("Working Status:", workingData.length, "rows");
+                console.log("Admin Contact:", adminData.length, "rows");
+                console.log("MPLS Devices:", mplsData.length, "rows");
+                console.log("Treasuries Data:", treasuriesData.length, "rows");
+                console.log("WAN2 Data:", wan2Data.length, "rows");
+            } catch (error) {
+                console.error("Error loading background sheets:", error);
+            }
         }
         
         function loadWorkingSheet() {
             const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_WORKING)}?key=${API_KEY}`;
-            
-            return fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.values && data.values.length > 0) {
-                        workingData = data.values;
-                        workingHeaders = workingData[0] || [];
-                        console.log("Working Data Headers:", workingHeaders);
-                    }
-                });
+            return fetch(url).then(response => response.json()).then(data => {
+                if (data.values && data.values.length > 0) {
+                    workingData = data.values;
+                    workingHeaders = workingData[0] || [];
+                }
+            }).catch(error => console.error("Error loading working sheet:", error));
         }
         
         function loadAdminSheet() {
             const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_ADMIN)}!A2:H?key=${API_KEY}`;
-            
-            return fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.values && data.values.length > 0) {
-                        adminData = data.values;
-                        console.log("Admin Data Loaded - Rows:", adminData.length);
-                    } else {
-                        console.log("No admin data found in A2:H range");
-                        adminData = [];
-                    }
-                })
-                .catch(error => {
-                    console.error("Error loading admin sheet:", error);
-                    adminData = [];
-                });
+            return fetch(url).then(response => response.json()).then(data => {
+                if (data.values && data.values.length > 0) adminData = data.values;
+                else adminData = [];
+            }).catch(error => { console.error("Error loading admin sheet:", error); adminData = []; });
         }
         
         function loadMplsSheet() {
             const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_MPLS)}?key=${API_KEY}`;
-            
-            return fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.values && data.values.length > 0) {
-                        mplsData = data.values;
-                        mplsHeaders = mplsData[0] || [];
-                        console.log("MPLS Data Loaded - Rows:", mplsData.length);
-                        console.log("MPLS Headers:", mplsHeaders);
-                    } else {
-                        console.log("No MPLS data found");
-                        mplsData = [];
-                    }
-                })
-                .catch(error => {
-                    console.error("Error loading MPLS sheet:", error);
-                    mplsData = [];
-                });
+            return fetch(url).then(response => response.json()).then(data => {
+                if (data.values && data.values.length > 0) {
+                    mplsData = data.values;
+                    mplsHeaders = mplsData[0] || [];
+                } else mplsData = [];
+            }).catch(error => { console.error("Error loading MPLS sheet:", error); mplsData = []; });
         }
         
-        // Load Treasuries sheet for LAN Pool and Gateway data
         function loadTreasuriesSheet() {
             const url = `https://sheets.googleapis.com/v4/spreadsheets/${TREASURIES_SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_TREASURIES)}!A2:G?key=${API_KEY}`;
-            
+            return fetch(url).then(response => response.json()).then(data => {
+                if (data.values && data.values.length > 0) treasuriesData = data.values;
+                else treasuriesData = [];
+            }).catch(error => { console.error("Error loading treasuries sheet:", error); treasuriesData = []; });
+        }
+        
+        // Load WAN2 Details sheet from new spreadsheet ID
+        function loadWan2Sheet() {
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${WAN2_SPREADSHEET_ID}/values/${encodeURIComponent(WAN2_SHEET_NAME)}?key=${API_KEY}`;
             return fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     if (data.values && data.values.length > 0) {
-                        treasuriesData = data.values;
-                        console.log("Treasuries Data Loaded - Rows:", treasuriesData.length);
+                        wan2Data = data.values;
+                        wan2Headers = wan2Data[0] || [];
+                        console.log("WAN2 Data Loaded - Rows:", wan2Data.length);
+                        console.log("WAN2 Headers:", wan2Headers);
                     } else {
-                        console.log("No treasuries data found");
-                        treasuriesData = [];
+                        console.log("No WAN2 data found - sheet might be empty");
+                        wan2Data = [];
                     }
                 })
                 .catch(error => {
-                    console.error("Error loading treasuries sheet:", error);
-                    treasuriesData = [];
+                    console.error("Error loading WAN2 sheet:", error);
+                    wan2Data = [];
                 });
         }
         
-        // Get LAN Pool and Gateway from treasuries sheet by treasury name
         function getTreasuryNetworkDetails(treasuryName) {
-            // Clean treasury name for matching
             let searchName = treasuryName;
             if (searchName.includes('-')) {
                 searchName = searchName.substring(searchName.indexOf('-') + 1).trim();
@@ -509,13 +511,10 @@
             return { lanPool: '', gatewayIP: '' };
         }
         
-        // =============================================
-        // POPULATE TREASURY SELECT
-        // =============================================
         function populateTreasurySelect() {
             const select = $('#treasurySelect');
             select.empty();
-            select.append('<option value="">Select Treasury</option>');
+            select.append('<option value="">-- Select Treasury --</option>');
             
             treasuryList.forEach(treasury => {
                 select.append(`<option value="${escapeHtml(treasury)}">${escapeHtml(treasury)}</option>`);
@@ -530,7 +529,7 @@
         }
         
         // =============================================
-        // VIEW TREASURY DETAILS
+        // VIEW TREASURY DETAILS - Fetch all tables on click
         // =============================================
         function viewTreasuryDetails() {
             const selectedTreasury = $('#treasurySelect').val();
@@ -544,13 +543,17 @@
             console.log("VIEWING TREASURY:", selectedTreasury);
             console.log("=================================");
             
-            $('#installationTableContainer').html('<div class="loading" style="display: block;"><div class="loading-spinner"></div><p>Loading installation data...</p></div>');
-            $('#mplsConfigTableContainer').html('<div class="loading" style="display: block;"><div class="loading-spinner"></div><p>Loading MPLS configuration...</p></div>');
+            // Show loading states for all containers
+            $('#installationTableContainer').html('<div class="loading" style="display: block;"><div class="loading-spinner"></div><p>Loading device configuration...</p></div>');
+            $('#mplsConfigTableContainer').html('<div class="loading" style="display: block;"><div class="loading-spinner"></div><p>Loading WAN 1 (MPLS) configuration...</p></div>');
+            $('#wan2ConfigTableContainer').html('<div class="loading" style="display: block;"><div class="loading-spinner"></div><p>Loading WAN 2 configuration...</p></div>');
             $('#treasuryWorkingTableContainer').html('<div class="loading" style="display: block;"><div class="loading-spinner"></div><p>Loading working status...</p></div>');
             $('#adminTableContainer').html('<div class="loading" style="display: block;"><div class="loading-spinner"></div><p>Loading admin contacts...</p></div>');
             
+            // Display all tables using current data (already loaded in background)
             displayInstallationTable(selectedTreasury);
             displayMplsConfigTable(selectedTreasury);
+            displayWan2ConfigTable(selectedTreasury);
             displayWorkingTableForTreasury(selectedTreasury);
             displayAdminTable(selectedTreasury);
         }
@@ -564,172 +567,174 @@
             
             const headers = installationData[0];
             const rows = installationData.slice(1).filter(row => row[0] && row[0].toString().trim() === treasury.trim());
-            
-            // Get LAN Pool and Gateway from treasuries sheet
             const networkDetails = getTreasuryNetworkDetails(treasury);
             
             let html = `<div class="table-responsive"><table class="table table-hover table-bordered">`;
             html += '<thead><tr>';
-            
-            // Add all original headers
             for (let i = 0; i < Math.min(12, headers.length); i++) {
                 html += `<th>${escapeHtml(headers[i] || `Col ${i+1}`)}</th>`;
             }
-            // Add LAN Pool and Gateway columns
             html += `<th>LAN Pool</th>`;
             html += `<th>FatPipe Device IP (Gateway)</th>`;
-            html += '</tr></thead><tbody>';
+            html += '</td></thead><tbody>';
             
             if (rows.length === 0) {
-                html += `<tr><td colspan="${Math.min(12, headers.length) + 2}" class="text-center py-4">No installation record for this treasury</td></tr>`;
+                html += `<td><td colspan="${Math.min(12, headers.length) + 2}" class="text-center py-4">No installation record for this treasury</td></tr>`;
             } else {
                 rows.forEach(row => {
                     html += '<tr>';
                     for (let i = 0; i < Math.min(12, headers.length); i++) {
                         html += `<td>${escapeHtml(row[i] || '—')}</td>`;
                     }
-                    // Add LAN Pool
                     const lanPoolDisplay = networkDetails.lanPool ? 
-                        `<span class="lan-pool">${escapeHtml(networkDetails.lanPool)}</span>` : 
-                        '<span class="empty-cell">—</span>';
+                        `<span class="lan-pool">${escapeHtml(networkDetails.lanPool)}</span>` : '—';
                     html += `<td>${lanPoolDisplay}</td>`;
-                    
-                    // Add Gateway IP
                     const gatewayDisplay = networkDetails.gatewayIP ? 
-                        `<span class="gateway-ip"><i class="bi bi-router me-1"></i>${escapeHtml(networkDetails.gatewayIP)}</span>` : 
-                        '<span class="empty-cell">—</span>';
+                        `<span class="gateway-ip"><i class="bi bi-router me-1"></i>${escapeHtml(networkDetails.gatewayIP)}</span>` : '—';
                     html += `<td>${gatewayDisplay}</td>`;
-                    
                     html += '</tr>';
                 });
             }
-            
             html += '</tbody></table></div>';
-            
-            // Add note about data source
-            html += `<div class="small text-muted mt-2">
-                <i class="bi bi-info-circle"></i> LAN Pool and Gateway IP fetched from Treasuries sheet
-            </div>`;
-            
+            html += `<div class="small text-muted mt-2"><i class="bi bi-info-circle"></i> LAN Pool and Gateway IP fetched from Treasuries.</div>`;
             $('#installationTableContainer').html(html);
         }
         
-        // =============================================
-        // MPLS CONFIGURATION TABLE
-        // =============================================
+        // WAN 1 MPLS Configuration Table
         function displayMplsConfigTable(treasury) {
             if (!mplsData || mplsData.length < 2) {
                 $('#mplsConfigTableContainer').html('<div class="empty-state">No MPLS configuration data available</div>');
                 return;
             }
             
-            const headers = mplsData[0] || [];
-            
             let searchTreasury = treasury;
-            if (treasury.includes('-')) {
-                searchTreasury = treasury.substring(treasury.indexOf('-') + 1).trim();
-            }
-            
+            if (treasury.includes('-')) searchTreasury = treasury.substring(treasury.indexOf('-') + 1).trim();
             let searchTreasuryClean = searchTreasury.replace(/treasury/i, '').trim();
             
             const rows = mplsData.slice(1).filter(row => {
                 if (!row || !row[0]) return false;
-                
                 const mplsTreasury = row[0].toString().trim();
-                const mplsTreasuryLower = mplsTreasury.toLowerCase();
-                const searchTreasuryLower = searchTreasury.toLowerCase();
-                const searchTreasuryCleanLower = searchTreasuryClean.toLowerCase();
-                
-                const exactMatch = mplsTreasury === treasury;
-                const baseMatch = mplsTreasury.includes(searchTreasury) || searchTreasury.includes(mplsTreasury);
-                const cleanMatch = mplsTreasuryLower.includes(searchTreasuryCleanLower) || 
-                                 searchTreasuryCleanLower.includes(mplsTreasuryLower);
-                const partialMatch = mplsTreasuryLower.includes(searchTreasuryLower) || 
-                                   searchTreasuryLower.includes(mplsTreasuryLower);
-                
-                return exactMatch || baseMatch || cleanMatch || partialMatch;
+                return mplsTreasury === treasury || mplsTreasury.includes(searchTreasury) || 
+                       searchTreasury.includes(mplsTreasury) ||
+                       mplsTreasury.toLowerCase().includes(searchTreasuryClean.toLowerCase());
             });
-            
-            console.log(`MPLS Config - Found ${rows.length} records for treasury:`, treasury);
             
             const columnDisplayNames = [
-                'Name of Treasury',
-                'BSNL TXN / TIP',
-                'LCO CODE',
-                'OLT IP',
-                'OUTER VLAN',
-                'WAN IP',
-                'VLAN',
-                'GATEWAY (BSNL)',
-                'GATEWAY (TREASURY)',
-                'Clarity order status',
-                'Status of work',
-                'LC ID'
+                'Name of Treasury', 'BSNL TXN / TIP', 'LCO CODE', 'OLT IP', 'OUTER VLAN', 
+                'WAN IP', 'VLAN', 'GATEWAY (WAN 1)', 'Fat-Pipe Interface IP (WAN 1)', 'Clarity order status', 
+                'Status of work', 'LC ID'
             ];
             
-            let html = `<div class="table-responsive"><table class="table table-hover table-bordered">`;
-            
-            html += '<thead><tr>';
-            columnDisplayNames.forEach(header => {
-                html += `<th>${escapeHtml(header)}</th>`;
-            });
-            html += '</tr></thead><tbody>';
+            let html = `<div class="table-responsive"><table class="table table-hover table-bordered"><thead><tr>`;
+            columnDisplayNames.forEach(header => { html += `<th>${escapeHtml(header)}</th>`; });
+            html += `</tr></thead><tbody>`;
             
             if (rows.length === 0) {
-                html += `
-                    <tr>
-                        <td colspan="${columnDisplayNames.length}" class="text-center py-4">
-                            <i class="bi bi-diagram-3 fs-1 text-muted"></i>
-                            <p class="mt-2">No MPLS configuration found for this treasury</p>
-                            <small class="text-muted">Treasury: ${escapeHtml(treasury)}</small>
-                        </td>
-                    </tr>
-                `;
+                html += `<tr><td colspan="${columnDisplayNames.length}" class="text-center py-4">No MPLS configuration found for this treasury</td></tr>`;
             } else {
                 rows.forEach(row => {
                     html += '<tr>';
-                    
                     for (let i = 0; i <= 10; i++) {
                         let cellValue = row[i] || '—';
-                        
                         if (i === 10) {
                             const statusLower = cellValue.toLowerCase();
                             let badgeClass = 'mpls-badge';
-                            
-                            if (statusLower.includes('completed')) {
-                                badgeClass = 'status-badge-working mpls-badge';
-                            } else if (statusLower.includes('pending')) {
-                                badgeClass = 'status-badge-other mpls-badge';
-                            } else if (statusLower.includes('wip')) {
-                                badgeClass = 'status-badge-linkdown mpls-badge';
-                            }
-                            
+                            if (statusLower.includes('completed')) badgeClass = 'status-badge-working mpls-badge';
+                            else if (statusLower.includes('pending')) badgeClass = 'status-badge-other mpls-badge';
+                            else if (statusLower.includes('wip')) badgeClass = 'status-badge-linkdown mpls-badge';
                             cellValue = `<span class="${badgeClass}">${escapeHtml(cellValue)}</span>`;
-                        } else {
-                            cellValue = escapeHtml(cellValue);
-                        }
-                        
+                        } else cellValue = escapeHtml(cellValue);
                         html += `<td>${cellValue}</td>`;
                     }
-                    
                     let lcIdValue = row[18] || '—';
-                    lcIdValue = escapeHtml(lcIdValue);
-                    html += `<td>${lcIdValue}</td>`;
-                    
+                    html += `<td>${escapeHtml(lcIdValue)}</td>`;
                     html += '</tr>';
                 });
             }
-            
             html += '</tbody></table></div>';
-            
-            html += `<div class="small text-muted mt-2">
-                <i class="bi bi-info-circle"></i> MPLS configuration records found: ${rows.length}
-            </div>`;
-            
+            html += `<div class="small text-muted mt-2"><i class="bi bi-info-circle"></i> MPLS configuration records found: ${rows.length}</div>`;
             $('#mplsConfigTableContainer').html(html);
         }
         
-        // Display Working Table For Treasury
+        // NEW: WAN 2 Configuration Table - Headers: Treasury, Type of Service, WAN Subnet, Gateway, Fat-Pipe Interface IP, Subnet (Columns A:F)
+        function displayWan2ConfigTable(treasury) {
+            if (!wan2Data || wan2Data.length < 2) {
+                $('#wan2ConfigTableContainer').html('<div class="empty-state">No WAN 2 configuration data available. Please check the WAN2 Details sheet.</div>');
+                return;
+            }
+            
+            // Clean treasury name for matching
+            let searchTreasury = treasury;
+            if (treasury.includes('-')) searchTreasury = treasury.substring(treasury.indexOf('-') + 1).trim();
+            let searchTreasuryClean = searchTreasury.replace(/treasury/i, '').trim();
+            
+            // Filter rows where first column (Device ID / Treasury Name) matches selected treasury
+            const rows = wan2Data.slice(1).filter(row => {
+                if (!row || !row[0]) return false;
+                const wan2Treasury = row[0].toString().trim();
+                const wan2TreasuryLower = wan2Treasury.toLowerCase();
+                const searchLower = searchTreasury.toLowerCase();
+                const searchCleanLower = searchTreasuryClean.toLowerCase();
+                
+                return wan2Treasury === treasury || 
+                       wan2Treasury.includes(searchTreasury) || 
+                       searchTreasury.includes(wan2Treasury) ||
+                       wan2TreasuryLower.includes(searchLower) ||
+                       wan2TreasuryLower.includes(searchCleanLower);
+            });
+            
+            // Define column headers as per requirement: Device ID, Type of Service, WAN Subnet, Gateway(PPoE Username/Password), Fat-Pipe Interface IP, Subnet
+            const wan2Columns = [
+                'Treasury', 
+                'Type of Service (MPLS/ILL/BroadBand/4G MPLS)', 
+                'WAN Subnet', 
+                'Gateway (WAN 2)', 
+                'Fat-Pipe Interface IP (WAN 2)', 
+                'Subnet'
+            ];
+            
+            let html = `<div class="table-responsive"><table class="table table-hover table-bordered"><thead><tr>`;
+            wan2Columns.forEach(col => { html += `<th>${escapeHtml(col)}</th>`; });
+            html += `</tr></thead><tbody>`;
+            
+            if (rows.length === 0) {
+                html += `<tr><td colspan="6" class="text-center py-4">
+                            <i class="bi bi-hdd-network fs-1 text-muted"></i>
+                            <p class="mt-2">No WAN 2 configuration found for this treasury</p>
+                            <small class="text-muted">Treasury: ${escapeHtml(treasury)}</small>
+                         </td></tr>`;
+            } else {
+                rows.forEach(row => {
+                    html += '<tr>';
+                    for (let i = 0; i < 6; i++) {  // Columns A through F (index 0 to 5)
+                        let cellValue = (row[i] && row[i].toString().trim() !== '') ? row[i].toString().trim() : '—';
+                        // Special styling for Gateway field - make it look like credential
+                        if (i === 3 && cellValue !== '—') {
+                            cellValue = `<span class="gateway-ip" style="background:#fef9e3;"><i class="bi bi-key me-1"></i>${escapeHtml(cellValue)}</span>`;
+                        } else if ((i === 2 || i === 5) && cellValue !== '—') {
+                            // WAN Subnet and Subnet fields - show in monospace
+                            cellValue = `<code>${escapeHtml(cellValue)}</code>`;
+                        } else if (i === 1 && cellValue !== '—') {
+                            // Type of Service - add badge
+                            let serviceClass = 'mpls-badge';
+                            let serviceLower = cellValue.toLowerCase();
+                            if (serviceLower.includes('mpls')) serviceClass = 'status-badge-working';
+                            else if (serviceLower.includes('broadband')) serviceClass = 'status-badge-other';
+                            else if (serviceLower.includes('4g')) serviceClass = 'status-badge-linkdown';
+                            cellValue = `<span class="${serviceClass}" style="padding:4px 12px;">${escapeHtml(cellValue)}</span>`;
+                        } else {
+                            cellValue = escapeHtml(cellValue);
+                        }
+                        html += `<td>${cellValue}</td>`;
+                    }
+                    html += '</tr>';
+                });
+            }
+            html += '</tbody></table></div>';
+            html += `<div class="small text-muted mt-2"><i class="bi bi-info-circle"></i> WAN 2 configuration records found: ${rows.length}. </div>`;
+            $('#wan2ConfigTableContainer').html(html);
+        }
+        
         function displayWorkingTableForTreasury(treasury) {
             if (!workingData || workingData.length < 2) {
                 $('#treasuryWorkingTableContainer').html('<div class="empty-state">No working data available</div>');
@@ -737,50 +742,30 @@
             }
             
             let searchTreasury = treasury;
-            if (treasury.includes('-')) {
-                searchTreasury = treasury.substring(treasury.indexOf('-') + 1).trim();
-            }
-            
+            if (treasury.includes('-')) searchTreasury = treasury.substring(treasury.indexOf('-') + 1).trim();
             const searchTreasuryLower = searchTreasury.toLowerCase();
             
             const rows = workingData.slice(1).filter(row => {
                 if (!row[0]) return false;
                 const workingTreasury = row[0].toString().trim();
-                const workingTreasuryLower = workingTreasury.toLowerCase();
-                
-                return workingTreasury === treasury || 
-                       workingTreasury.includes(searchTreasury) || 
+                return workingTreasury === treasury || workingTreasury.includes(searchTreasury) || 
                        searchTreasury.includes(workingTreasury) ||
-                       workingTreasuryLower.includes(searchTreasuryLower);
+                       workingTreasury.toLowerCase().includes(searchTreasuryLower);
             });
             
-            let html = `<div class="table-responsive"><table class="table table-hover table-striped">
-                <thead>
-                    <tr>
-                        <th>Name of Treasury</th>
-                        <th>CONTACT DETAILS OF BSNL OFFIERS</th>
-                        <th>Treasury Remarks</th>
-                        <th>BBM REMARKS</th>
-                        <th>Issue Remarks</th>
-                    </tr>
-                </thead>
-                <tbody>`;
+            let html = `<div class="table-responsive"><table class="table table-hover table-striped"><thead><tr>
+                        <th>Name of Treasury</th><th>CONTACT DETAILS OF BSNL OFFIERS</th>
+                        <th>Treasury Remarks</th><th>BBM REMARKS</th><th>Issue Remarks</th>
+                        </tr></thead><tbody>`;
             
             if (rows.length === 0) {
                 html += `<tr><td colspan="5" class="text-center py-4">No working status found for this treasury</td></tr>`;
             } else {
                 rows.forEach(row => {
-                    const treasuryName = row[0] || '—';
-                    const bsnlContact = row[12] || '—';
                     let treasuryRemarks = row[13] || '—';
-                    const bbmRemarks = row[14] || '—';
-                    const issueRemarks = row[15] || '—';
-                    
                     const remarksLower = treasuryRemarks.toLowerCase();
-                    
                     let badgeClass = 'status-badge-other';
                     let icon = 'bi-question-circle';
-                    
                     if (treasuryRemarks === '' || treasuryRemarks === '—') {
                         badgeClass = 'status-badge-blank';
                         icon = 'bi-dash-circle';
@@ -794,148 +779,79 @@
                         badgeClass = 'status-badge-notworking';
                         icon = 'bi-exclamation-circle';
                     }
-                    
                     treasuryRemarks = `<span class="${badgeClass}"><i class="bi ${icon}"></i> ${escapeHtml(treasuryRemarks)}</span>`;
-                    
                     html += `<tr>
-                        <td><strong>${escapeHtml(treasuryName)}</strong></td>
-                        <td>${escapeHtml(bsnlContact)}</td>
+                        <td><strong>${escapeHtml(row[0] || '—')}</strong></td>
+                        <td>${escapeHtml(row[12] || '—')}</td>
                         <td>${treasuryRemarks}</td>
-                        <td>${escapeHtml(bbmRemarks)}</td>
-                        <td>${escapeHtml(issueRemarks)}</td>
+                        <td>${escapeHtml(row[14] || '—')}</td>
+                        <td>${escapeHtml(row[15] || '—')}</td>
                     </tr>`;
                 });
             }
-            
             html += '</tbody></table></div>';
             $('#treasuryWorkingTableContainer').html(html);
         }
         
-        // Display Admin Table
         function displayAdminTable(treasury) {
-            console.log("Admin Contact - Loading for treasury:", treasury);
-            
             if (!adminData || adminData.length === 0) {
-                console.log("No admin data available");
                 $('#adminTableContainer').html('<div class="empty-state">No admin contact data available</div>');
                 return;
             }
             
-            const adminColumns = [
-                'Treasury/Location',
-                'Network Admin Name',
-                'Network Admin Contact',
-                'Treasury Admin Name',
-                'Treasury Admin Contact',
-                'Office Mail ID',
-                'Office Contact',
-                'Office Mobile'
-            ];
+            const adminColumns = ['Treasury/Location', 'Network Admin Name', 'Network Admin Contact', 
+                                  'Treasury Admin Name', 'Treasury Admin Contact', 'Office Mail ID', 
+                                  'Office Contact', 'Office Mobile'];
             
             let searchTreasury = treasury;
-            if (treasury.includes('-')) {
-                searchTreasury = treasury.substring(treasury.indexOf('-') + 1).trim();
-            }
-            
+            if (treasury.includes('-')) searchTreasury = treasury.substring(treasury.indexOf('-') + 1).trim();
             let searchTreasuryClean = searchTreasury.replace(/treasury/i, '').trim();
             
             const rows = adminData.filter(row => {
                 if (!row || !row[0]) return false;
-                
                 const adminTreasury = row[0].toString().trim();
-                const adminTreasuryLower = adminTreasury.toLowerCase();
-                const searchTreasuryLower = searchTreasury.toLowerCase();
-                const searchTreasuryCleanLower = searchTreasuryClean.toLowerCase();
-                
-                const exactMatch = adminTreasury === treasury;
-                const baseMatch = adminTreasury.includes(searchTreasury) || searchTreasury.includes(adminTreasury);
-                const cleanMatch = adminTreasuryLower.includes(searchTreasuryCleanLower) || 
-                                 searchTreasuryCleanLower.includes(adminTreasuryLower);
-                const partialMatch = adminTreasuryLower.includes(searchTreasuryLower) || 
-                                   searchTreasuryLower.includes(adminTreasuryLower);
-                
-                return exactMatch || baseMatch || cleanMatch || partialMatch;
+                return adminTreasury === treasury || adminTreasury.includes(searchTreasury) || 
+                       searchTreasury.includes(adminTreasury) ||
+                       adminTreasury.toLowerCase().includes(searchTreasuryClean.toLowerCase());
             });
             
-            console.log(`Admin Contact - Found ${rows.length} records for treasury:`, treasury);
-            
-            let html = `<div class="table-responsive"><table class="table table-hover table-bordered">`;
-            
-            html += '<thead><tr>';
-            adminColumns.forEach(header => {
-                html += `<th>${escapeHtml(header)}</th>`;
-            });
-            html += '</tr></thead><tbody>';
+            let html = `<div class="table-responsive"><table class="table table-hover table-bordered"><thead><tr>`;
+            adminColumns.forEach(header => { html += `<th>${escapeHtml(header)}</th>`; });
+            html += `</tr></thead><tbody>`;
             
             if (rows.length === 0) {
-                html += `
-                    <tr>
-                        <td colspan="8" class="text-center py-4">
-                            <i class="bi bi-person-x fs-1 text-muted"></i>
-                            <p class="mt-2">No admin contact details found for this treasury</p>
-                            <small class="text-muted">Treasury: ${escapeHtml(treasury)}</small>
-                        </td>
-                    </tr>
-                `;
+                html += `<tr><td colspan="8" class="text-center py-4">No admin contact details found for this treasury</td></tr>`;
             } else {
                 rows.forEach(row => {
                     html += '<tr>';
                     for (let i = 0; i < 8; i++) {
                         let cellValue = row[i] || '—';
-                        
                         if (i === 5 && cellValue !== '—' && cellValue.includes('@')) {
                             cellValue = `<a href="mailto:${escapeHtml(cellValue)}">${escapeHtml(cellValue)}</a>`;
                         } else if ((i === 2 || i === 4 || i === 6 || i === 7) && cellValue !== '—') {
                             const cleanNumber = cellValue.replace(/[^0-9+]/g, '');
-                            if (cleanNumber) {
-                                cellValue = `<a href="tel:${escapeHtml(cleanNumber)}">${escapeHtml(cellValue)}</a>`;
-                            }
-                        } else {
-                            cellValue = escapeHtml(cellValue);
-                        }
-                        
+                            if (cleanNumber) cellValue = `<a href="tel:${escapeHtml(cleanNumber)}">${escapeHtml(cellValue)}</a>`;
+                        } else cellValue = escapeHtml(cellValue);
                         html += `<td>${cellValue}</td>`;
                     }
                     html += '</tr>';
                 });
             }
-            
             html += '</tbody></table></div>';
-            
-            html += `<div class="small text-muted mt-2">
-                <i class="bi bi-info-circle"></i> Admin contact records found: ${rows.length}
-            </div>`;
-            
             $('#adminTableContainer').html(html);
         }
         
-        // =============================================
-        // UTILITY FUNCTIONS
-        // =============================================
         function escapeHtml(text) {
             if (!text) return '—';
             if (typeof text !== 'string') text = String(text);
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
+            const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
             return text.replace(/[&<>"']/g, m => map[m]);
         }
         
         function showError(message) {
-            const errorHtml = `
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    ${message}
-                </div>
-            `;
+            const errorHtml = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>${message}</div>`;
             $('#treasuryDetails .card-body').prepend(errorHtml);
-            setTimeout(() => {
-                $('.alert-danger').fadeOut(300, function() { $(this).remove(); });
-            }, 5000);
+            setTimeout(() => { $('.alert-danger').fadeOut(300, function() { $(this).remove(); }); }, 5000);
         }
     </script>
 </body>
