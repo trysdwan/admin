@@ -1,4 +1,4 @@
-<!-- post.html - Updated with Author Image Support -->
+<!-- post.html - Updated with URL Parameter Support for Category and Author -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -37,6 +37,20 @@
         }
         .avatar:hover {
             transform: scale(1.05);
+        }
+        .category-link {
+            cursor: pointer;
+            color: #1a73e8;
+            text-decoration: none;
+        }
+        .category-link:hover {
+            text-decoration: underline;
+        }
+        .author-link {
+            cursor: pointer;
+        }
+        .author-link:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -92,7 +106,7 @@
         console.log('URL updated to:', newUrl);
     }
     
-    // Extract post ID from URL parameters
+    // Extract post ID from URL parameters (ONLY source)
     function getPostIdFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         const urlId = urlParams.get('id');
@@ -102,17 +116,18 @@
         return null;
     }
     
-    // Navigate to category
+    // Navigate to category with URL parameter (no localStorage)
     function navigateToCategory(category) {
-        localStorage.setItem('selectedCategory', category);
-        window.location.href = 'category.html';
+        window.location.href = `category.html?category=${encodeURIComponent(category)}`;
     }
     
-    // Navigate to author profile
+    // Navigate to author profile with URL parameter (no sessionStorage)
     function navigateToAuthor(authorName, authorDesignation) {
-        sessionStorage.setItem('profileAuthorName', authorName);
-        sessionStorage.setItem('profileAuthorDesignation', authorDesignation || '');
-        window.location.href = 'profile.html';
+        let url = `profile.html?author=${encodeURIComponent(authorName)}`;
+        if (authorDesignation && authorDesignation.trim()) {
+            url += `&designation=${encodeURIComponent(authorDesignation)}`;
+        }
+        window.location.href = url;
     }
     
     // Submit like to Apps Script
@@ -343,7 +358,7 @@
         
         let contentHtml = `<div class="blog-header">
             <div class="text-muted small mb-2">
-                <span class="category-link" data-category="${escapeHtml(post.category)}" style="cursor: pointer; color: #1a73e8;">
+                <span class="category-link" data-category="${escapeHtml(post.category)}">
                     <i class="bi bi-folder"></i> ${escapeHtml(post.category)}
                 </span>
             </div>
@@ -352,7 +367,7 @@
                 <div class="d-flex align-items-center gap-2">
                     ${authorAvatarHtml}
                     <div>
-                        <div class="author-link fw-bold" data-author="${escapeHtml(post.author)}" data-designation="${escapeHtml(authorProfile.designation)}" style="cursor: pointer;">
+                        <div class="author-link fw-bold" data-author="${escapeHtml(post.author)}" data-designation="${escapeHtml(authorProfile.designation)}">
                             ${escapeHtml(post.author)}
                         </div>
                         ${authorProfile.designation ? `<div class="small text-muted">${escapeHtml(authorProfile.designation)}</div>` : ''}
@@ -378,13 +393,13 @@
         document.getElementById("postContentWrapper").innerHTML = contentHtml;
         renderCommentsSection();
         
-        // Add event listeners for category and author links
+        // Add event listeners for category link - using URL parameter
         document.querySelector('.category-link')?.addEventListener('click', (e) => {
             const category = e.currentTarget.getAttribute('data-category');
             navigateToCategory(category);
         });
         
-        // Add event listeners for all author link elements (both image and text)
+        // Add event listeners for all author link elements - using URL parameter
         document.querySelectorAll('.author-link').forEach(el => {
             el.addEventListener('click', (e) => {
                 const authorName = el.getAttribute('data-author');
@@ -461,25 +476,21 @@
     async function initPostPage() {
         await loadHeaderConfig();
         
-        // Priority 1: Check URL parameters for post ID
+        // ONLY get post ID from URL parameters (no localStorage fallback)
         let postId = getPostIdFromUrl();
-        
-        // Priority 2: If no ID in URL, check localStorage
-        if (!postId) {
-            postId = localStorage.getItem('blogPostId');
-        }
-        
-        // Store the current post ID for later use
-        currentPostId = postId;
         
         if(!postId) {
             document.getElementById("loadingSpinner").innerHTML = `<div class="error-box alert alert-danger">
                 <i class="bi bi-exclamation-triangle-fill"></i><br>
                 <strong>No post ID found!</strong><br>
-                Please go back to the <a href="./index.html">homepage</a> and select a post.
+                Please use a valid post URL like:<br>
+                <code>post.html?id=1</code>
             </div>`;
             return;
         }
+        
+        // Store the current post ID for later use
+        currentPostId = postId;
         
         try {
             const { post, comments } = await fetchPostData(postId);

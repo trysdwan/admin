@@ -1,4 +1,4 @@
-<!-- profile.html - Author Profile Page with URL Parameter Support -->
+<!-- profile.html - Author Profile Page with URL Parameter Support (No sessionStorage) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -54,13 +54,16 @@
         .profile-header {
             background: linear-gradient(135deg, #4f46e5, #7c3aed);
             padding: 3rem 0 5rem;
-            margin-bottom: -3rem;
+            margin-bottom: 2rem;
         }
         .error-box {
             max-width: 600px;
             margin: 3rem auto;
             text-align: center;
             padding: 2rem;
+        }
+        .category-badge {
+            cursor: pointer;
         }
     </style>
 </head>
@@ -133,7 +136,7 @@
         console.log('Profile URL updated to:', newUrl);
     }
     
-    // Extract author info from URL parameters
+    // Extract author info from URL parameters (ONLY source)
     function getAuthorFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         const authorName = urlParams.get('author');
@@ -311,24 +314,34 @@
         
         container.innerHTML = postsToShow.map(p => `
             <div class="col-md-4 col-lg-3">
-                <div class="card-blog h-100 p-3" onclick="navigateToPost('${p.id}')">
+                <div class="card-blog h-100 p-3">
                     <img src="${p.image}" class="card-img-top rounded-3" style="height:180px; object-fit:cover;" onerror="this.src='https://placehold.co/600x400/e2e8f0/64748b?text=No+Image'">
                     <div class="card-body px-0 mt-2">
                         <span class="category-badge" data-category="${escapeHtml(p.category)}">${escapeHtml(p.category)}</span>
                         <h5 class="fw-bold mt-2">${escapeHtml(p.title)}</h5>
                         <div class="small text-muted"><i class="bi bi-calendar"></i> ${escapeHtml(p.publishedTime)}</div>
                         <p class="mt-2 small text-secondary">${escapeHtml(stripHtml(p.content).substring(0,100))}...</p>
-                        <button class="btn btn-primary-custom mt-2 w-100">Read more →</button>
+                        <button class="btn btn-primary-custom mt-2 w-100 post-read-btn" data-id="${p.id}">Read more →</button>
                     </div>
                 </div>
             </div>
         `).join('');
         
+        // Add post read button handlers
+        document.querySelectorAll(".post-read-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const postId = btn.getAttribute("data-id");
+                navigateToPost(postId);
+            });
+        });
+        
         // Add category click handlers
         document.querySelectorAll(".category-badge").forEach(badge => {
             badge.addEventListener("click", (e) => {
                 e.stopPropagation();
-                navigateToCategory(badge.getAttribute("data-category"));
+                const category = badge.getAttribute("data-category");
+                navigateToCategory(category);
             });
         });
     }
@@ -354,39 +367,33 @@
     async function initProfilePage() {
         await loadHeaderConfig();
         
-        // Priority 1: Check URL parameters for author
+        // ONLY get author from URL parameters (no sessionStorage fallback)
         let authorFromUrl = getAuthorFromUrl();
-        let authorName = null;
-        let authorDesignation = '';
         
-        if (authorFromUrl) {
-            authorName = authorFromUrl.name;
-            authorDesignation = authorFromUrl.designation;
-        }
-        
-        // Priority 2: If no author in URL, check session storage
-        if (!authorName) {
-            authorName = sessionStorage.getItem('profileAuthorName');
-            authorDesignation = sessionStorage.getItem('profileAuthorDesignation') || '';
-        }
-        
-        currentAuthorName = authorName;
-        
-        if(!authorName) {
+        if (!authorFromUrl || !authorFromUrl.name) {
+            // No author in URL - show error
             document.getElementById("profileCard").innerHTML = `
                 <div class="error-box">
-                    <div class="alert alert-danger">
+                    <div class="alert alert-warning">
                         <i class="bi bi-exclamation-triangle-fill"></i><br>
-                        <strong>No author selected!</strong><br>
-                        Please go back to a <a href="./index.html">post</a> and click on an author's name.
+                        <strong>No author specified!</strong><br>
+                        Please use a valid author URL like:<br>
+                        <code>profile.html?author=John%20Doe</code>
                     </div>
+                    <button class="btn btn-primary-custom mt-3" onclick="navigateToHome()">
+                        <i class="bi bi-house"></i> Back to Home
+                    </button>
                 </div>`;
             document.getElementById("postsGrid").innerHTML = '';
             document.getElementById("loadMoreTrigger").style.display = "none";
             return;
         }
         
-        // Update URL with author parameter
+        let authorName = authorFromUrl.name;
+        let authorDesignation = authorFromUrl.designation;
+        currentAuthorName = authorName;
+        
+        // Update URL with author parameter (ensures it's in the URL)
         updateBrowserUrl(authorName, authorDesignation);
         
         // Update page title

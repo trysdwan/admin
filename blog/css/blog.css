@@ -464,7 +464,7 @@ a:hover {
 
 /* ---------- Category Header ---------- */
 .category-header {
-    background: linear-gradient(135deg, var(--primary), #7c3aed);
+    background: linear-gradient(135deg, #001b9d, #001b9d);
     color: var(--white);
     padding: 3rem 0;
     margin-bottom: 2rem;
@@ -697,7 +697,7 @@ footer {
     border-radius: var(--radius-full);
 }
 .profile-header {
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+             background: linear-gradient(135deg, #001b9d, #001b9d);
             padding: 3rem 0 5rem;
             margin-bottom: -3rem;
         }

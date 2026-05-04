@@ -1,14 +1,14 @@
-<!-- index.html - Fixed Search Functionality -->
+<!-- index.html - Fixed with URL Parameter Support for Posts -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Blog Home - Modern Articles</title>
+    <title>NOC/blog</title>
     <link rel="stylesheet" href="css/bootstrap.min.css">
     <link rel="stylesheet" href="css/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/swiper-bundle.min.css">
-    <!-- Custom Blog CSS  -->
+    <!-- Custom Blog CSS -->
     <link rel="stylesheet" href="css/blog.css">
 </head>
 <body>
@@ -85,6 +85,17 @@
         let temp = document.createElement("div");
         temp.innerHTML = html;
         return temp.textContent || temp.innerText || "";
+    }
+
+    // ==================== UPDATED NAVIGATION FUNCTIONS ====================
+    // Navigate to post with URL parameter (no localStorage)
+    function navigateToPost(postId) {
+        window.location.href = `post.html?id=${postId}`;
+    }
+    
+    // Navigate to category with URL parameter
+    function navigateToCategory(category) {
+        window.location.href = `category.html?category=${encodeURIComponent(category)}`;
     }
 
     // Search function
@@ -205,14 +216,18 @@
             </div>
         `).join('');
         
-        // Attach event listeners
+        // Attach event listeners - using navigateToPost with URL parameter
         document.querySelectorAll(".tile-read-btn").forEach(btn => {
-            btn.addEventListener("click", (e) => navigateToPost(btn.getAttribute("data-id")));
+            btn.addEventListener("click", (e) => {
+                const postId = btn.getAttribute("data-id");
+                navigateToPost(postId);
+            });
         });
         document.querySelectorAll(".category-badge").forEach(badge => {
             badge.addEventListener("click", (e) => {
                 e.stopPropagation();
-                navigateToCategory(badge.getAttribute("data-category"));
+                const category = badge.getAttribute("data-category");
+                navigateToCategory(category);
             });
         });
     }
@@ -283,12 +298,16 @@
         `).join('');
         
         document.querySelectorAll(".tile-read-btn").forEach(btn => {
-            btn.addEventListener("click", (e) => navigateToPost(btn.getAttribute("data-id")));
+            btn.addEventListener("click", (e) => {
+                const postId = btn.getAttribute("data-id");
+                navigateToPost(postId);
+            });
         });
         document.querySelectorAll(".category-badge").forEach(badge => {
             badge.addEventListener("click", (e) => {
                 e.stopPropagation();
-                navigateToCategory(badge.getAttribute("data-category"));
+                const category = badge.getAttribute("data-category");
+                navigateToCategory(category);
             });
         });
         
@@ -300,17 +319,6 @@
             loadBtn.style.display = "inline-block"; 
             document.getElementById("noMoreMsg").classList.add("d-none"); 
         }
-    }
-
-    // Navigate functions
-    function navigateToCategory(category) {
-        localStorage.setItem('selectedCategory', category);
-        window.location.href = 'category.html';
-    }
-
-    function navigateToPost(postId) {
-        localStorage.setItem('blogPostId', postId);
-        window.location.href = 'post.html';
     }
 
     async function loadHeaderConfig() {
@@ -430,7 +438,6 @@
             if (mobileInput) {
                 mobileInput.addEventListener("input", (e) => {
                     performSearch(e.target.value);
-                    // Also update desktop input if needed
                     if (desktopInput && desktopInput.value !== e.target.value) {
                         desktopInput.value = e.target.value;
                         if (clearDesktopBtn) {
@@ -461,7 +468,7 @@
         const posts = [];
         for(let i=1; i<rows.length; i++) {
             let row = rows[i];
-            if(row[0]) { // Only add if post ID exists
+            if(row[0]) {
                 let post = {
                     id: row[0],
                     category: row[1] || "General",
@@ -505,11 +512,13 @@
             </div>`;
         
         document.querySelector('.hero-read-btn')?.addEventListener('click', (e) => {
-            navigateToPost(e.currentTarget.getAttribute('data-id'));
+            const postId = e.currentTarget.getAttribute('data-id');
+            navigateToPost(postId);
         });
         document.querySelector('.category-badge')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            navigateToCategory(e.currentTarget.getAttribute('data-category'));
+            const category = e.currentTarget.getAttribute('data-category');
+            navigateToCategory(category);
         });
     }
 
@@ -537,12 +546,16 @@
         `).join('');
         
         document.querySelectorAll(".related-read-btn").forEach(btn => {
-            btn.addEventListener("click", (e) => navigateToPost(btn.getAttribute("data-id")));
+            btn.addEventListener("click", (e) => {
+                const postId = btn.getAttribute("data-id");
+                navigateToPost(postId);
+            });
         });
         document.querySelectorAll(".category-badge").forEach(badge => {
             badge.addEventListener("click", (e) => {
                 e.stopPropagation();
-                navigateToCategory(badge.getAttribute("data-category"));
+                const category = badge.getAttribute("data-category");
+                navigateToCategory(category);
             });
         });
     }
@@ -578,12 +591,16 @@
         });
         
         document.querySelectorAll(".slide-read-btn").forEach(btn => {
-            btn.addEventListener("click", (e) => navigateToPost(btn.getAttribute("data-id")));
+            btn.addEventListener("click", (e) => {
+                const postId = btn.getAttribute("data-id");
+                navigateToPost(postId);
+            });
         });
         document.querySelectorAll(".category-badge").forEach(badge => {
             badge.addEventListener("click", (e) => {
                 e.stopPropagation();
-                navigateToCategory(badge.getAttribute("data-category"));
+                const category = badge.getAttribute("data-category");
+                navigateToCategory(category);
             });
         });
         
