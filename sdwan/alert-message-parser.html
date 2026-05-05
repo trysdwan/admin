@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Monitoring - Alert Parser</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+            padding: 30px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #1a3e60;
+            border-left: 5px solid #0077b6;
+            padding-left: 15px;
+        }
+        .radio-group {
+            margin: 20px 0;
+            display: flex;
+            gap: 30px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 12px;
+        }
+        .radio-group label {
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        textarea {
+            width: 100%;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            resize: vertical;
+            margin: 10px 0;
+            transition: 0.2s;
+        }
+        textarea:focus {
+            border-color: #0077b6;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0,119,182,0.1);
+        }
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        button {
+            background: #0077b6;
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: 0.2s;
+            flex: 1;
+        }
+        button:hover {
+            background: #023e8a;
+            transform: scale(1.01);
+        }
+        .reset-btn {
+            background: #6c757d;
+        }
+        .reset-btn:hover {
+            background: #495057;
+        }
+        .result {
+            margin-top: 25px;
+            padding: 15px;
+            border-radius: 12px;
+            background: #e9ecef;
+            display: none;
+        }
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 6px solid #28a745;
+            display: block;
+        }
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 6px solid #dc3545;
+            display: block;
+        }
+        .preview {
+            background: #f1f3f5;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+        hr {
+            margin: 20px 0;
+        }
+        .status-badge {
+            font-size: 13px;
+            background: #e2e3e5;
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>📡 Network Alert Parser</h2>
+    <p>Paste the email/alert content. The system will auto-detect fields: <strong>Message, Hostname, Resource name, Circuit ID, Event Time</strong>.<br>
+    <span class="status-badge"></span></p>
+
+    <div class="radio-group">
+        <label>
+            <input type="radio" name="sheetTarget" value="Railtel" checked>Railtel
+        </label>
+        <label>
+            <input type="radio" name="sheetTarget" value="BSNL"> BSNL
+        </label>
+    </div>
+
+    <label for="emailText"><strong>✉️ Email / Alert Text:</strong></label>
+    <textarea id="emailText" rows="10" placeholder=''></textarea>
+
+    <div class="button-group">
+        <button id="submitBtn">Submit</button>
+        <button id="resetBtn" class="reset-btn">Reset</button>
+    </div>
+
+    <div id="resultArea" class="result"></div>
+    <div id="previewArea" class="preview" style="display: none;"></div>
+</div>
+
+<script>
+    // Config: Replace with your Google Apps Script Web App URL
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzDhe-RGXU_ASxEijm_ffJjgoLECmBMOOurL-TEVy2doQJQd-_cKHUGULpb5bp4gbX_/exec';
+
+    // Helper: Extract field from text (case-insensitive, flexible)
+    function extractField(text, fieldName) {
+        // Patterns: "Message: Link Down" or "Message : Link Down" or "Hostname: BR0199"
+        const regex = new RegExp(`${fieldName}\\s*:\\s*(.+?)(?=\\n|$)`, 'i');
+        const match = text.match(regex);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+        return '';
+    }
+
+    // Determine sheet from first line of email (Dear X team)
+    function detectSheetFromGreeting(text) {
+        const firstLine = text.split('\n')[0] || '';
+        if (firstLine.match(/dear\s+railton?tel?\s+team/i)) return 'Railtel';
+        if (firstLine.match(/dear\s+bsnl\s+team/i)) return 'BSNL';
+        return null; // not detected
+    }
+
+    // Main parse function
+    function parseAlert(emailBody) {
+        // Default empty values
+        let result = {
+            message: '',
+            hostname: '',
+            resourceName: '',
+            circuitId: '',
+            eventTime: ''
+        };
+
+        // Try exact matches from known labels
+        result.message = extractField(emailBody, 'Message');
+        result.hostname = extractField(emailBody, 'Hostname');
+        result.resourceName = extractField(emailBody, 'Resource name');
+        result.circuitId = extractField(emailBody, 'Circuit ID');
+        result.eventTime = extractField(emailBody, 'Event Time');
+
+        // Fallback: sometimes "Resource name" may be written as "Resource Name" — handled by case-insensitive
+        if (!result.resourceName) {
+            result.resourceName = extractField(emailBody, 'Resource Name');
+        }
+
+        // Additional: if Circuit ID shows "None", keep as "None"
+        if (!result.circuitId) result.circuitId = '';
+        
+        // Event time fallback: try to find any date pattern if missing (optional)
+        if (!result.eventTime) {
+            const dateRegex = /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}\s+\d{1,2}:\d{2}\s+(AM|PM)/i;
+            const dateMatch = emailBody.match(dateRegex);
+            if (dateMatch) result.eventTime = dateMatch[0];
+        }
+
+        return result;
+    }
+
+    // Reset function
+    function resetForm() {
+        // Clear textarea
+        document.getElementById('emailText').value = '';
+        
+        // Reset radio buttons to default (Railtel)
+        document.querySelector('input[value="Railtel"]').checked = true;
+        
+        // Clear result area
+        const resultDiv = document.getElementById('resultArea');
+        resultDiv.className = 'result';
+        resultDiv.innerHTML = '';
+        resultDiv.style.display = 'none';
+        
+        // Clear preview area
+        const previewDiv = document.getElementById('previewArea');
+        previewDiv.style.display = 'none';
+        previewDiv.innerHTML = '';
+        
+        // Optional: Show a temporary reset confirmation
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'result success';
+        resultDiv.innerHTML = '🔄 Form has been reset.';
+        
+        // Hide the confirmation after 2 seconds
+        setTimeout(() => {
+            if (resultDiv.innerHTML === '🔄 Form has been reset.') {
+                resultDiv.style.display = 'none';
+            }
+        }, 2000);
+    }
+
+    // Submit data to Google Sheets via POST
+    async function submitToSheet(sheetName, parsedData) {
+        const payload = {
+            sheetName: sheetName,
+            message: parsedData.message,
+            hostname: parsedData.hostname,
+            resourceName: parsedData.resourceName,
+            circuitId: parsedData.circuitId,
+            eventTime: parsedData.eventTime,
+            timestamp: new Date().toISOString()
+        };
+
+        try {
+            const response = await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors', // because you'll deploy as Web App with CORS handling
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+            // With 'no-cors' we can't read response body reliably,
+            // but we assume success if no network error. 
+            // Alternatively change to cors & proper response.
+            return { success: true, message: 'Request sent. Check sheet for new row.' };
+        } catch (error) {
+            console.error('Submit error:', error);
+            return { success: false, message: `Network error: ${error.message}` };
+        }
+    }
+
+    // Main click handler for submit
+    document.getElementById('submitBtn').addEventListener('click', async () => {
+        const emailText = document.getElementById('emailText').value.trim();
+        const resultDiv = document.getElementById('resultArea');
+        const previewDiv = document.getElementById('previewArea');
+        
+        if (!emailText) {
+            resultDiv.className = 'result error';
+            resultDiv.innerHTML = '❌ Please paste email content.';
+            return;
+        }
+
+        // 1. Parse fields
+        const parsed = parseAlert(emailText);
+        
+        // 2. Determine target sheet (radio button)
+        let selectedSheet = document.querySelector('input[name="sheetTarget"]:checked').value;
+        
+        // 3. Auto detect from first line (override radio if found)
+        const detectedSheet = detectSheetFromGreeting(emailText);
+        if (detectedSheet) {
+            selectedSheet = detectedSheet;
+            // update radio UI to reflect auto-detection
+            document.querySelector(`input[value="${detectedSheet}"]`).checked = true;
+        }
+        
+        // Validation: ensure at least Message or Hostname is present? optional
+        if (!parsed.message && !parsed.hostname) {
+            resultDiv.className = 'result error';
+            resultDiv.innerHTML = '⚠️ Could not extract "Message" or "Hostname". Ensure format like "Message: Link Down" and "Hostname: BR0199"';
+            return;
+        }
+
+        // Show preview before submit
+        previewDiv.style.display = 'block';
+        previewDiv.innerHTML = `<strong>📋 Extracted Data (will send to ${selectedSheet}):</strong><br>
+        Message: ${parsed.message || '(empty)'}<br>
+        Hostname: ${parsed.hostname || '(empty)'}<br>
+        Resource name: ${parsed.resourceName || '(empty)'}<br>
+        Circuit ID: ${parsed.circuitId || '(empty)'}<br>
+        Event Time: ${parsed.eventTime || '(empty)'}<br>`;
+        
+        resultDiv.className = 'result';
+        resultDiv.innerHTML = '⏳ Submitting to Google Sheet...';
+        
+        // 4. Submit
+        const submitResult = await submitToSheet(selectedSheet, parsed);
+        
+        if (submitResult.success) {
+            resultDiv.className = 'result success';
+            resultDiv.innerHTML = `✅ Success! Data sent to "${selectedSheet}" sheet.<br> Row added: ${parsed.message} | ${parsed.hostname}`;
+        } else {
+            resultDiv.className = 'result error';
+            resultDiv.innerHTML = `❌ Submission failed: ${submitResult.message}<br> Check Apps Script deployment & URL.`;
+        }
+    });
+
+    // Reset button handler
+    document.getElementById('resetBtn').addEventListener('click', resetForm);
+</script>
+</body>
+</html>
