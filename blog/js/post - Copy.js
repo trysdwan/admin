@@ -1,3 +1,5 @@
+
+
 let currentPost = null;
 let allComments = [];
 let commenterName = localStorage.getItem('commenterName') || '';
@@ -10,12 +12,6 @@ let isCommentPending = false;
 // Store original like count for potential rollback
 let originalLikeCount = 0;
 let optimisticLikeApplied = false;
-
-// Store all posts for related posts functionality
-let allPostsMaster = [];
-
-// Swiper instance for related posts
-let relatedSwiper = null;
 
 function showToastMessage(msg, isError = false) {
     const toastEl = document.getElementById('liveToast');
@@ -61,16 +57,6 @@ function navigateToAuthor(authorName, authorDesignation) {
         url += `&designation=${encodeURIComponent(authorDesignation)}`;
     }
     window.location.href = url;
-}
-
-// Navigate to post
-function navigateToPost(postId) {
-    window.location.href = `post.html?id=${postId}`;
-}
-
-// Navigate to homepage (All Articles)
-function navigateToHome() {
-    window.location.href = 'index.html';
 }
 
 // Social Share Functions
@@ -162,20 +148,6 @@ function openShareModal(url, title, imageUrl) {
     if (shareModal) shareModal.classList.add('active');
 }
 
-// Extract first image from HTML
-function extractFirstImage(html) {
-    if (!html) return null;
-    const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-    return match ? match[1] : null;
-}
-
-// Strip HTML tags
-function stripHtml(html) {
-    let temp = document.createElement("div");
-    temp.innerHTML = html;
-    return temp.textContent || temp.innerText || "";
-}
-
 // Submit like to Apps Script (background sync)
 async function submitLikeToServer(postId) {
     try {
@@ -191,6 +163,7 @@ async function submitLikeToServer(postId) {
         
         if(result.success) {
             console.log('Like synced successfully:', result.newLikes);
+            // Update the UI with the actual server count if different
             const likeSpan = document.getElementById("likeCountSpan");
             if (likeSpan) {
                 const currentDisplay = parseInt(likeSpan.innerText) || 0;
@@ -205,9 +178,12 @@ async function submitLikeToServer(postId) {
     } catch(error) {
         console.error('Like sync error:', error);
         showToastMessage('Failed to sync like. Please try again.', true);
+        // Revert the optimistic update on failure
+        revertLikeCount();
         return null;
     } finally {
         isLikePending = false;
+        // Re-enable like button
         const likeButton = document.getElementById("likeButton");
         if (likeButton) {
             likeButton.disabled = false;
@@ -217,7 +193,45 @@ async function submitLikeToServer(postId) {
     }
 }
 
-// Submit comment to Apps Script
+function revertLikeCount() {
+    if (optimisticLikeApplied) {
+        const likeSpan = document.getElementById("likeCountSpan");
+        if (likeSpan) {
+            likeSpan.innerText = originalLikeCount;
+        }
+        optimisticLikeApplied = false;
+    }
+}
+
+// Optimistic like update - updates UI instantly
+function optimisticLikeUpdate() {
+    const likeSpan = document.getElementById("likeCountSpan");
+    if (likeSpan && !isLikePending) {
+        // Store original value before optimistic update
+        originalLikeCount = parseInt(likeSpan.innerText) || 0;
+        likeSpan.innerText = originalLikeCount + 1;
+        optimisticLikeApplied = true;
+        
+        // Disable like button temporarily to prevent multiple clicks
+        const likeButton = document.getElementById("likeButton");
+        if (likeButton) {
+            likeButton.disabled = true;
+            likeButton.style.opacity = '0.6';
+            likeButton.style.cursor = 'wait';
+        }
+        
+        // Show instant feedback toast
+        showToastMessage('❤️ Liked! (Syncing...)');
+        
+        // Start background sync
+        submitLikeToServer(currentPost.id);
+        
+        return true;
+    }
+    return false;
+}
+
+// Submit comment to Apps Script (background sync)
 async function submitCommentToServer(postId, userName, commentText, tempCommentId) {
     try {
         const formData = new FormData();
@@ -234,12 +248,14 @@ async function submitCommentToServer(postId, userName, commentText, tempCommentI
         
         if(result.success) {
             console.log('Comment synced successfully');
+            // Update the timestamp of the optimistic comment
             const commentElement = document.querySelector(`.comment-card[data-temp-id="${tempCommentId}"]`);
             if (commentElement) {
                 const dateSpan = commentElement.querySelector('.comment-date');
                 if (dateSpan && result.timestamp) {
                     dateSpan.innerText = result.timestamp;
                 }
+                // Remove the temp-id attribute after sync
                 commentElement.removeAttribute('data-temp-id');
             }
             showToastMessage('💬 Comment posted!');
@@ -249,9 +265,11 @@ async function submitCommentToServer(postId, userName, commentText, tempCommentI
         }
     } catch(error) {
         console.error('Comment sync error:', error);
+        // Remove the optimistic comment on failure
         const commentElement = document.querySelector(`.comment-card[data-temp-id="${tempCommentId}"]`);
         if (commentElement) {
             commentElement.remove();
+            // Update the comment count display
             const commentsCountSpan = document.getElementById('commentsCountSpan');
             if (commentsCountSpan) {
                 const currentCount = parseInt(commentsCountSpan.innerText) || allComments.length;
@@ -270,7 +288,7 @@ async function submitCommentToServer(postId, userName, commentText, tempCommentI
     }
 }
 
-// Optimistic comment update
+// Optimistic comment update - adds comment to UI instantly
 function optimisticCommentUpdate(userName, commentText) {
     if (isCommentPending) {
         showToastMessage('Please wait, posting your previous comment...', true);
@@ -280,6 +298,7 @@ function optimisticCommentUpdate(userName, commentText) {
     const timestamp = new Date().toLocaleString();
     const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     
+    // Create optimistic comment object
     const optimisticComment = {
         user: userName,
         date: timestamp + ' (Syncing...)',
@@ -288,24 +307,32 @@ function optimisticCommentUpdate(userName, commentText) {
         tempId: tempId
     };
     
+    // Add to local comments array
     allComments.push(optimisticComment);
+    
+    // Update UI instantly
     addCommentToUI(optimisticComment, tempId);
     
+    // Clear the textarea
     const commentInput = document.getElementById("commentTextInput");
     if (commentInput) commentInput.value = "";
     
+    // Show instant feedback
     showToastMessage('💬 Comment posted! (Syncing...)');
     
+    // Start background sync
     isCommentPending = true;
     submitCommentToServer(currentPost.id, userName, commentText, tempId);
     
     return true;
 }
 
+// Helper function to add a single comment to UI
 function addCommentToUI(comment, tempId) {
     const commentsContainer = document.getElementById('commentsContainer');
     if (!commentsContainer) return;
     
+    // Remove "no comments" message if present
     const noCommentsMsg = commentsContainer.querySelector('.no-comments-msg');
     if (noCommentsMsg) noCommentsMsg.remove();
     
@@ -321,6 +348,7 @@ function addCommentToUI(comment, tempId) {
     
     commentsContainer.insertAdjacentHTML('beforeend', commentHtml);
     
+    // Update comments count in both places
     const commentsCountSpan = document.getElementById('commentsCountSpan');
     if (commentsCountSpan) {
         commentsCountSpan.innerText = allComments.length;
@@ -332,6 +360,7 @@ function addCommentToUI(comment, tempId) {
     }
 }
 
+// Full comments section render with container for dynamic updates
 function renderCommentsSection() {
     const wrapper = document.getElementById("postContentWrapper");
     let existingDiv = document.getElementById("commentsArea");
@@ -366,8 +395,10 @@ function renderCommentsSection() {
     commentsDiv.innerHTML = commentsHtml;
     wrapper.appendChild(commentsDiv);
     
+    // Add event listener for comment submission with optimistic update
     const submitBtn = document.getElementById("submitCommentBtn");
     if (submitBtn) {
+        // Remove any existing listener to avoid duplicates
         const newSubmitBtn = submitBtn.cloneNode(true);
         submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
         
@@ -383,142 +414,10 @@ function renderCommentsSection() {
                 commenterName = userName;
             }
             
+            // Use optimistic update instead of waiting for server
             optimisticCommentUpdate(userName, commentText);
         });
     }
-}
-
-// Fetch all posts for related content
-async function fetchAllPosts() {
-    const blogUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/blog%20data!A:I?key=${CONFIG.API_KEY}`;
-    const response = await fetch(blogUrl);
-    const data = await response.json();
-    const rows = data.values || [];
-    if(rows.length < 2) return [];
-    
-    const posts = [];
-    for(let i=1; i<rows.length; i++) {
-        let row = rows[i];
-        if(row[0]) {
-            posts.push({
-                id: row[0],
-                category: row[1] || "General",
-                tags: row[2] || "",
-                author: row[3] || "Anonymous",
-                publishedTime: row[4] || "",
-                title: row[5] || "Untitled",
-                content: row[6] || "",
-                likeCount: parseInt(row[7]) || 0,
-                shareCount: parseInt(row[8]) || 0,
-                image: extractFirstImage(row[6] || "")
-            });
-        }
-    }
-    return posts;
-}
-
-// Render related posts slider
-function renderRelatedPostsSlider(currentPostId, currentCategory) {
-    const container = document.getElementById('relatedPostsSliderContainer');
-    if (!container) return;
-    
-    // Filter posts: same category, exclude current post
-    let relatedPosts = allPostsMaster.filter(p => 
-        p.category === currentCategory && String(p.id) !== String(currentPostId)
-    ).slice(0, 10); // Show up to 10 related posts
-    
-    if (relatedPosts.length === 0) {
-        container.style.display = 'none';
-        // Hide back button container as well
-        const backButtonContainer = document.getElementById('backToHomeContainer');
-        if (backButtonContainer) backButtonContainer.style.display = 'none';
-        return;
-    }
-    
-    const wrapper = document.getElementById('relatedSliderWrapper');
-    if (!wrapper) return;
-    
-    wrapper.innerHTML = relatedPosts.map(post => `
-        <div class="swiper-slide h-auto">
-            <div class="card-blog h-100 p-3">
-                <img src="${post.image}" class="card-img-top rounded-3" 
-                     style="height:160px; object-fit:cover;" 
-                     onerror="this.src='https://placehold.co/600x400/e2e8f0/64748b?text=No+Image'"
-                     loading="lazy">
-                <div class="card-body px-0 pt-3">
-                    <span class="category-badge related-category-badge" data-category="${escapeHtml(post.category)}">${escapeHtml(post.category)}</span>
-                    <h6 class="fw-bold mt-2" style="font-size: 0.95rem; line-height: 1.4;">${escapeHtml(post.title.substring(0, 60))}${post.title.length > 60 ? '...' : ''}</h6>
-                    <div class="small text-muted mb-2">
-                        <i class="bi bi-person-circle"></i> ${escapeHtml(post.author)} · ${escapeHtml(post.publishedTime)}
-                    </div>
-                    <a class="slide-read-link related-read-link" data-id="${post.id}" style="cursor: pointer;">
-                        Read more <i class="bi bi-arrow-right"></i>
-                    </a>
-                </div>
-            </div>
-        </div>
-    `).join('');
-    
-    // Destroy existing swiper if any
-    if (relatedSwiper) {
-        relatedSwiper.destroy(true, true);
-        relatedSwiper = null;
-    }
-    
-    // Initialize new swiper
-    relatedSwiper = new Swiper(".relatedSwiper", {
-        slidesPerView: 1.2,
-        spaceBetween: 16,
-        breakpoints: {
-            640: { slidesPerView: 2 },
-            768: { slidesPerView: 2.5 },
-            1024: { slidesPerView: 3.5 }
-        },
-        navigation: {
-            nextEl: "#relatedNextBtn",
-            prevEl: "#relatedPrevBtn",
-        }
-    });
-    
-    // Show the container
-    container.style.display = 'block';
-    
-    // Show and setup the back to home button
-    const backButtonContainer = document.getElementById('backToHomeContainer');
-    if (backButtonContainer) {
-        backButtonContainer.style.display = 'block';
-        
-        // Add event listener for the back button
-        const backButton = document.getElementById('backToHomeBtn');
-        if (backButton) {
-            // Remove any existing listeners to avoid duplicates
-            const newBackButton = backButton.cloneNode(true);
-            backButton.parentNode.replaceChild(newBackButton, backButton);
-            
-            newBackButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                navigateToHome();
-            });
-        }
-    }
-    
-    // Add event listeners for category badges
-    document.querySelectorAll('.related-category-badge').forEach(badge => {
-        badge.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const category = badge.getAttribute('data-category');
-            navigateToCategory(category);
-        });
-    });
-    
-    // Add event listeners for read links
-    document.querySelectorAll('.related-read-link').forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const postId = link.getAttribute('data-id');
-            navigateToPost(postId);
-        });
-    });
 }
 
 async function loadHeaderConfig() {
@@ -609,6 +508,7 @@ async function fetchPostData(postId) {
     return { post: foundPost, comments };
 }
 
+// Fetch complete author profile from profiles sheet (including image)
 async function fetchAuthorProfile(authorName) {
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/profiles!A:D?key=${CONFIG.API_KEY}`;
@@ -625,12 +525,31 @@ async function fetchAuthorProfile(authorName) {
                 };
             }
         }
-        return { name: authorName, designation: '', about: '', imageUrl: null };
+        return {
+            name: authorName,
+            designation: '',
+            about: '',
+            imageUrl: null
+        };
     } catch(error) {
-        return { name: authorName, designation: '', about: '', imageUrl: null };
+        console.error('Error fetching author profile:', error);
+        return {
+            name: authorName,
+            designation: '',
+            about: '',
+            imageUrl: null
+        };
     }
 }
 
+// Extract first image URL from HTML content
+function extractFirstImage(html) {
+    if (!html) return null;
+    const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    return match ? match[1] : null;
+}
+
+// Remove the first image from HTML content to avoid duplication
 function removeFirstImageFromContent(html) {
     if (!html) return html;
     return html.replace(/<img[^>]+>/i, '');
@@ -642,16 +561,22 @@ async function renderPostPage(post, comments) {
     document.getElementById("postContentWrapper").style.display = "block";
     document.title = `${post.title} | Blog Studio`;
     
+    // Update browser URL with post ID
     updateBrowserUrl(post.id);
     
     const avatarLetter = (post.author.charAt(0) || 'A').toUpperCase();
     const featuredImg = extractFirstImage(post.content);
+    
+    // Fetch complete author profile (including image)
     const authorProfile = await fetchAuthorProfile(post.author);
+    
+    // Remove the first image from content to avoid duplication
     let contentWithoutFirstImage = post.content;
     if (featuredImg) {
         contentWithoutFirstImage = removeFirstImageFromContent(post.content);
     }
     
+    // Generate author avatar HTML (image if available, otherwise initials)
     let authorAvatarHtml = '';
     if (authorProfile.imageUrl) {
         authorAvatarHtml = `<img src="${authorProfile.imageUrl}" class="author-avatar-img author-link" 
@@ -667,9 +592,13 @@ async function renderPostPage(post, comments) {
                            </div>`;
     }
     
+    // Get full page URL for sharing
     const shareUrl = getCurrentPageUrl(post.id);
+    
+    // Store current like count for optimistic updates
     originalLikeCount = post.likeCount;
     
+    // Start building content
     let contentHtml = `<div class="blog-header">
         <div class="text-muted small mb-2">
             <span class="category-link" data-category="${escapeHtml(post.category)}">
@@ -692,40 +621,35 @@ async function renderPostPage(post, comments) {
         </div>
     </div>`;
     
+    // Show featured image - full width across screen
     if(featuredImg) {
         contentHtml += `<div class="post-featured-img-container">
             <img src="${featuredImg}" class="post-featured-img-full" alt="Featured image for ${escapeHtml(post.title)}">
         </div>`;
     }
     
+    // Add content and action bar
     contentHtml += `<div class="blog-content-wrapper">
         <div class="blog-content">${contentWithoutFirstImage}</div>
     </div>
     <div class="action-bar">
         <button id="likeButton" class="action-btn like-btn"><i class="bi bi-hand-thumbs-up"></i> <span id="likeCountSpan">${post.likeCount}</span> likes</button>
+       
         <span><i class="bi bi-chat-dots"></i> ${comments.length} comments</span>
-        <button id="shareButton" class="action-btn share-btn"><i class="bi bi-share-fill"></i> Share</button>
+ <button id="shareButton" class="action-btn share-btn"><i class="bi bi-share-fill"></i> Share</button>
     </div>`;
     
     document.getElementById("postContentWrapper").innerHTML = contentHtml;
+    
     renderCommentsSection();
     
-    // Render related posts slider AFTER comments section
-    const sliderContainer = document.getElementById('relatedPostsSliderContainer');
-    const commentsArea = document.getElementById('commentsArea');
-    if (sliderContainer && commentsArea) {
-        commentsArea.insertAdjacentElement('afterend', sliderContainer);
-    }
-    
-    // Render related posts (this will also handle showing/hiding the back button)
-    renderRelatedPostsSlider(post.id, post.category);
-    
-    // Event listeners
+    // Add event listeners for category link - using URL parameter
     document.querySelector('.category-link')?.addEventListener('click', (e) => {
         const category = e.currentTarget.getAttribute('data-category');
         navigateToCategory(category);
     });
     
+    // Add event listeners for all author link elements - using URL parameter
     document.querySelectorAll('.author-link').forEach(el => {
         el.addEventListener('click', (e) => {
             const authorName = el.getAttribute('data-author');
@@ -734,23 +658,29 @@ async function renderPostPage(post, comments) {
         });
     });
     
+    // Optimistic like button handler - DIRECT INSTANT UPDATE
     const likeButton = document.getElementById("likeButton");
     if (likeButton) {
+        // Remove any existing listeners
         const newLikeButton = likeButton.cloneNode(true);
         likeButton.parentNode.replaceChild(newLikeButton, likeButton);
         
         newLikeButton.addEventListener("click", async (e) => {
             e.preventDefault();
+            
             if (isLikePending) {
                 showToastMessage("Please wait, your like is being processed...", true);
                 return;
             }
             
+            // INSTANT UI UPDATE - increment the like count immediately
             const likeSpan = document.getElementById("likeCountSpan");
             if (likeSpan && !isLikePending) {
+                // Store original value before optimistic update
                 const currentLikeCount = parseInt(likeSpan.innerText) || 0;
                 likeSpan.innerText = currentLikeCount + 1;
                 
+                // Disable like button temporarily to prevent multiple clicks
                 const btn = document.getElementById("likeButton");
                 if (btn) {
                     btn.disabled = true;
@@ -759,8 +689,11 @@ async function renderPostPage(post, comments) {
                 }
                 
                 isLikePending = true;
+                
+                // Show instant feedback toast
                 showToastMessage('❤️ Liked!');
                 
+                // Start background sync
                 try {
                     const formData = new FormData();
                     formData.append('action', 'like');
@@ -774,6 +707,7 @@ async function renderPostPage(post, comments) {
                     
                     if(result.success) {
                         console.log('Like synced successfully:', result.newLikes);
+                        // Update the UI with the actual server count if different
                         if (likeSpan && result.newLikes !== parseInt(likeSpan.innerText)) {
                             likeSpan.innerText = result.newLikes;
                         }
@@ -783,11 +717,13 @@ async function renderPostPage(post, comments) {
                 } catch(error) {
                     console.error('Like sync error:', error);
                     showToastMessage('Failed to sync like. Please try again.', true);
+                    // Revert the optimistic update on failure
                     if (likeSpan) {
                         likeSpan.innerText = currentLikeCount;
                     }
                 } finally {
                     isLikePending = false;
+                    // Re-enable like button
                     const btn = document.getElementById("likeButton");
                     if (btn) {
                         btn.disabled = false;
@@ -799,7 +735,8 @@ async function renderPostPage(post, comments) {
         });
     }
     
-    document.getElementById("shareButton")?.addEventListener("click", () => {
+    // Updated share button to open social share modal
+    document.getElementById("shareButton").addEventListener("click", () => {
         openShareModal(shareUrl, post.title, featuredImg);
     });
 }
@@ -812,6 +749,7 @@ function escapeHtml(str) {
 async function initPostPage() {
     await loadHeaderConfig();
     
+    // ONLY get post ID from URL parameters (no localStorage fallback)
     let postId = getPostIdFromUrl();
     
     if(!postId) {
@@ -824,15 +762,13 @@ async function initPostPage() {
         return;
     }
     
+    // Store the current post ID for later use
     currentPostId = postId;
     
     try {
-        // Fetch all posts for related content first
-        allPostsMaster = await fetchAllPosts();
-        
         const { post, comments } = await fetchPostData(postId);
         currentPost = post;
-        await renderPostPage(post, comments);
+        renderPostPage(post, comments);
     } catch(err) {
         console.error('Init error:', err);
         document.getElementById("loadingSpinner").innerHTML = `<div class="error-box alert alert-danger">
@@ -843,6 +779,7 @@ async function initPostPage() {
     }
 }
 
+// Handle browser back/forward buttons
 window.addEventListener('popstate', function(event) {
     const postId = getPostIdFromUrl();
     if (postId && postId !== currentPostId) {
@@ -850,6 +787,7 @@ window.addEventListener('popstate', function(event) {
     }
 });
 
+// Make share functions globally accessible
 window.shareOnFacebook = shareOnFacebook;
 window.shareOnTwitter = shareOnTwitter;
 window.shareOnWhatsApp = shareOnWhatsApp;

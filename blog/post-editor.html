@@ -52,19 +52,23 @@
         <a class="navbar-brand fw-bold" href="./post-editor.html">
             <i class="bi bi-journal-bookmark-fill fs-3" style="color: #4f46e5"></i>
             /blog        </a>
-        <div class="ms-auto d-flex align-items-center gap-3">
-            <div class="user-info" id="userInfo">
-                <span id="userAvatar"></span>
-                <span class="user-name" id="userNameDisplay"></span>
-            </div>
-            <a href="login.html" class="btn btn-outline-danger btn-sm rounded-pill logout-btn" id="logoutBtn">
-                <i class="bi bi-box-arrow-right"></i> Logout
-            </a>
-            <a href="./index.html" class="btn btn-outline-secondary btn-sm rounded-pill">
-                <i class="bi bi-house"></i> Home
-            </a>
-        </div>
+      <div class="ms-auto d-flex align-items-center gap-3">
+    <div class="user-info" id="userInfo">
+        <span id="userAvatar"></span>
+        <span class="user-name" id="userNameDisplay"></span>
     </div>
+    <a href="profile-settings.html" class="btn btn-outline-primary btn-sm rounded-pill">
+        <i class="bi bi-person-gear"></i> Profile
+    </a>
+    <a href="login.html" class="btn btn-outline-danger btn-sm rounded-pill logout-btn" id="logoutBtn">
+        <i class="bi bi-box-arrow-right"></i> Logout
+    </a>
+    <a href="./index.html" class="btn btn-outline-secondary btn-sm rounded-pill">
+        <i class="bi bi-house"></i> Home
+    </a>
+</div>
+    </div>
+	
 </nav>
 
 <div class="editor-container">
@@ -496,47 +500,52 @@
     }
 
     async function addNewCategory(categoryName) {
-        if(!categoryName || !categoryName.trim()) return false;
-        if(existingCategories.includes(categoryName.trim())) {
-            showToastMessage('Category already exists!', true);
-            return false;
-        }
-        existingCategories.push(categoryName.trim());
-        existingCategories.sort();
-        
-        [$('#categorySelect'), $('#editCategorySelect')].forEach(select => {
-            select.append(`<option value="${escapeHtml(categoryName.trim())}">${escapeHtml(categoryName.trim())}</option>`);
-            select.val(categoryName.trim()).trigger('change');
-        });
-        
-        showToastMessage(`Category "${categoryName}" added and selected!`);
-        return true;
+    if(!categoryName || !categoryName.trim()) return false;
+    if(existingCategories.includes(categoryName.trim())) {
+        showToastMessage('Category already exists!', true);
+        return false;
     }
-
-    async function addNewTag(tagName) {
-        if(!tagName || !tagName.trim()) return false;
-        if(existingTags.includes(tagName.trim())) {
-            showToastMessage('Tag already exists!', true);
-            return false;
-        }
-        existingTags.push(tagName.trim());
-        existingTags.sort();
-        
-        [$('#tagsSelect'), $('#editTagsSelect')].forEach(select => {
-            select.append(`<option value="${escapeHtml(tagName.trim())}">${escapeHtml(tagName.trim())}</option>`);
-        });
-        
-        const mainTags = $('#tagsSelect');
-        let currentVal = mainTags.val() || [];
-        if(!currentVal.includes(tagName.trim())) {
-            currentVal.push(tagName.trim());
-            mainTags.val(currentVal).trigger('change');
-        }
-        
-        showToastMessage(`Tag "${tagName}" added and selected!`);
-        return true;
+    existingCategories.push(categoryName.trim());
+    existingCategories.sort();
+    
+    // Update main category select
+    const categorySelect = $('#categorySelect');
+    const currentVal = categorySelect.val();
+    categorySelect.append(`<option value="${escapeHtml(categoryName.trim())}" selected>${escapeHtml(categoryName.trim())}</option>`);
+    categorySelect.trigger('change');
+    
+    // Update edit category select
+    const editCategorySelect = $('#editCategorySelect');
+    editCategorySelect.append(`<option value="${escapeHtml(categoryName.trim())}">${escapeHtml(categoryName.trim())}</option>`);
+    
+    showToastMessage(`Category "${categoryName}" added and selected!`);
+    return true;
+}
+  async function addNewTag(tagName) {
+    if(!tagName || !tagName.trim()) return false;
+    if(existingTags.includes(tagName.trim())) {
+        showToastMessage('Tag already exists!', true);
+        return false;
     }
-
+    existingTags.push(tagName.trim());
+    existingTags.sort();
+    
+    // Update main tags select
+    const tagsSelect = $('#tagsSelect');
+    tagsSelect.append(`<option value="${escapeHtml(tagName.trim())}">${escapeHtml(tagName.trim())}</option>`);
+    let currentVal = tagsSelect.val() || [];
+    if(!currentVal.includes(tagName.trim())) {
+        currentVal.push(tagName.trim());
+        tagsSelect.val(currentVal).trigger('change');
+    }
+    
+    // Update edit tags select
+    const editTagsSelect = $('#editTagsSelect');
+    editTagsSelect.append(`<option value="${escapeHtml(tagName.trim())}">${escapeHtml(tagName.trim())}</option>`);
+    
+    showToastMessage(`Tag "${tagName}" added and selected!`);
+    return true;
+}
     async function loadPostsTable() {
         setLoading(true);
         try {
@@ -593,38 +602,88 @@
         setLoading(false);
     }
 
-    // Edit post - FIXED: Also set the author hidden field
-    window.editPost = async function(postId) {
-        setLoading(true);
-        try {
-            const post = postsData.find(p => String(p.id) === String(postId));
-            if(!post) throw new Error('Post not found');
-            
-            document.getElementById('editPostId').value = post.id;
-            document.getElementById('editAuthorName').value = post.author; // Set author hidden field
-            
-            $('#editCategorySelect').val(post.category).trigger('change');
-            
-            const tagArray = post.tags ? post.tags.split(',').map(t => t.trim()) : [];
-            $('#editTagsSelect').val(tagArray).trigger('change');
-            
-            document.getElementById('editTitle').value = post.title;
-            editQuill.root.innerHTML = post.content;
-            
-            document.getElementById('editFormContainer').style.display = 'block';
-            document.getElementById('editFormContainer').scrollIntoView({ behavior: 'smooth' });
-            
-        } catch(error) {
-            showToastMessage('Error loading post for edit: ' + error.message, true);
+// Edit post - FIXED: Properly set Select2 values
+window.editPost = async function(postId) {
+    setLoading(true);
+    try {
+        const post = postsData.find(p => String(p.id) === String(postId));
+        if(!post) throw new Error('Post not found');
+        
+        document.getElementById('editPostId').value = post.id;
+        document.getElementById('editAuthorName').value = post.author;
+        
+        // Set category in Select2 - Destroy and recreate to ensure proper loading
+        const editCategorySelect = $('#editCategorySelect');
+        
+        // Temporarily destroy Select2, set value, then reinitialize
+        if (editCategorySelect.hasClass('select2-hidden-accessible')) {
+            editCategorySelect.select2('destroy');
         }
-        setLoading(false);
-    };
+        
+        editCategorySelect.empty().append('<option value="">Select a category...</option>');
+        existingCategories.forEach(cat => {
+            editCategorySelect.append(`<option value="${escapeHtml(cat)}" ${cat === post.category ? 'selected' : ''}>${escapeHtml(cat)}</option>`);
+        });
+        
+        // Add the post's category if not in list
+        if (post.category && !existingCategories.includes(post.category)) {
+            editCategorySelect.append(`<option value="${escapeHtml(post.category)}" selected>${escapeHtml(post.category)}</option>`);
+        }
+        
+        editCategorySelect.select2({ theme: 'bootstrap-5', placeholder: 'Select a category', allowClear: true });
+        
+        // Set tags in Select2
+        const editTagsSelect = $('#editTagsSelect');
+        if (editTagsSelect.hasClass('select2-hidden-accessible')) {
+            editTagsSelect.select2('destroy');
+        }
+        
+        editTagsSelect.empty();
+        existingTags.forEach(tag => {
+            editTagsSelect.append(`<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`);
+        });
+        
+        // Add any tags from the post that are not in master list
+        const tagArray = post.tags ? post.tags.split(',').map(t => t.trim()) : [];
+        tagArray.forEach(tag => {
+            if (tag && !existingTags.includes(tag)) {
+                editTagsSelect.append(`<option value="${escapeHtml(tag)}" selected>${escapeHtml(tag)}</option>`);
+            }
+        });
+        
+        editTagsSelect.select2({ theme: 'bootstrap-5', placeholder: 'Select or type tags', tags: true, tokenSeparators: [',', ' '], allowClear: true });
+        editTagsSelect.val(tagArray).trigger('change');
+        
+        document.getElementById('editTitle').value = post.title;
+        editQuill.root.innerHTML = post.content;
+        
+        document.getElementById('editFormContainer').style.display = 'block';
+        document.getElementById('editFormContainer').scrollIntoView({ behavior: 'smooth' });
+        
+    } catch(error) {
+        console.error('Edit error:', error);
+        showToastMessage('Error loading post for edit: ' + error.message, true);
+    }
+    setLoading(false);
+};
 
-    window.hideEditForm = function() {
-        document.getElementById('editFormContainer').style.display = 'none';
-        document.getElementById('editPostForm').reset();
-        editQuill.root.innerHTML = '';
-    };
+window.hideEditForm = function() {
+    document.getElementById('editFormContainer').style.display = 'none';
+    document.getElementById('editPostForm').reset();
+    editQuill.root.innerHTML = '';
+    // Reset Select2 properly
+    $('#editCategorySelect').select2('destroy').empty().append('<option value="">Select a category...</option>');
+    existingCategories.forEach(cat => {
+        $('#editCategorySelect').append(`<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`);
+    });
+    $('#editCategorySelect').select2({ theme: 'bootstrap-5', placeholder: 'Select a category', allowClear: true });
+    
+    $('#editTagsSelect').select2('destroy').empty();
+    existingTags.forEach(tag => {
+        $('#editTagsSelect').append(`<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`);
+    });
+    $('#editTagsSelect').select2({ theme: 'bootstrap-5', placeholder: 'Select or type tags', tags: true, tokenSeparators: [',', ' '], allowClear: true });
+};
 
     // Submit edit - FIXED: Include author name in the update
     document.getElementById('editPostForm').addEventListener('submit', async (e) => {

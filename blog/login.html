@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - NOC / blog</title>
-     <!-- Favicon -->
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="../images/favicon.svg">
 
     <link rel="stylesheet" href="css/bootstrap.min.css">
@@ -100,16 +100,57 @@
             transition: opacity 0.25s;
             pointer-events: none;
         }
-        .password-requirements {
-            font-size: 0.75rem;
+        .auth-links {
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        .auth-links a {
             color: #64748b;
-            margin-top: 0.5rem;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .auth-links a:hover {
+            color: var(--primary);
+        }
+        .home-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #f1f5f9;
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            margin-bottom: 1rem;
+        }
+        .home-link:hover {
+            background: #e2e8f0;
+            transform: translateX(-2px);
         }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="login-card">
+            <!-- Home/Blog Link at top -->
+            <div class="mb-3">
+                <a href="./index.html" class="home-link">
+                    <i class="bi bi-house-door"></i> Read Articles
+                </a>
+            </div>
+
             <div class="login-logo">
                 <i class="bi bi-journal-bookmark-fill"></i>
                 <h2>/blog</h2>
@@ -137,8 +178,14 @@
                     <i class="bi bi-box-arrow-in-right"></i> Sign In
                 </button>
 
-                <div class="text-center mt-4">
-                    <small class="text-muted">.</small>
+                <!-- Authentication Links -->
+                <div class="auth-links">
+                    <a href="reset-password.html">
+                        <i class="bi bi-key"></i> Forgot Password?
+                    </a>
+                    <a href="register.html">
+                        <i class="bi bi-person-plus"></i> Register as Author
+                    </a>
                 </div>
             </form>
         </div>
@@ -161,7 +208,7 @@
         async function verifyLogin(username, password) {
             try {
                 // Fetch profiles from sheet (columns A to F)
-                const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/profiles!A:F?key=${CONFIG.API_KEY}`;
+                const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/Profiles!A:F?key=${CONFIG.API_KEY}`;
                 const response = await fetch(url);
                 const data = await response.json();
                 const rows = data.values || [];
@@ -186,7 +233,7 @@
                             };
                         }
                         
-                        // Check password (either from Password column)
+                        // Check password
                         const validPassword = storedPassword && storedPassword === password;
                         
                         if (validPassword) {
