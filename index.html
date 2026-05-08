@@ -6,13 +6,19 @@
     <title>NOC Admin</title>
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <!-- Bootstrap 5.3 + icons -->
-    <link rel="stylesheet" href="./css/bootstrap.min.css">
-    <link rel="stylesheet" href="./css/bootstrap-icons.min.css">
+    
+    <!-- Cache Control Meta Tags -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    <!-- Bootstrap 5.3 + icons with cache-busting -->
+    <link rel="stylesheet" href="./css/bootstrap.min.css?v=20250101">
+    <link rel="stylesheet" href="./css/bootstrap-icons.min.css?v=20250101">
     <!-- Google Fonts: Noto Malayalam -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Malayalam:wght@400;500;700&display=swap" rel="stylesheet">
-    <!-- Local CSS -->
-    <link rel="stylesheet" href="./css/main-style.css">
+    <!-- Local CSS with cache-busting -->
+    <link rel="stylesheet" href="./css/main-style.css?v=20250101">
     <!-- PWA Manifest -->
     <link rel="manifest" href="/network/manifest.json">
     
@@ -30,11 +36,245 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="NOC Admin">
- <script>
-        // Mobile redirect
-        if (window.innerWidth <= 768 || /Mobile|iPhone|iPad|Android/i.test(navigator.userAgent)) {
-            window.location.href = "app.html";
+    
+    <!-- Notification Icon Styles -->
+    <style>
+        .notification-icon-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            cursor: pointer;
         }
+        
+        .notification-icon {
+            font-size: 1.4rem;
+            color: var(--text-primary);
+            transition: all 0.2s ease;
+            background: transparent;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .notification-icon:hover {
+            background: var(--dropdown-hover);
+            transform: scale(1.05);
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -8px;
+            background-color: #dc2626;
+            color: white;
+            border-radius: 50%;
+            min-width: 18px;
+            height: 18px;
+            font-size: 10px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            animation: pulse-red 1.5s infinite;
+        }
+        
+        .notification-badge.zero {
+            display: none;
+        }
+        
+        @keyframes pulse-red {
+            0% {
+                box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+            }
+        }
+        
+        /* Dark theme adjustments */
+        body.dark-theme .notification-icon {
+            color: var(--text-primary);
+        }
+        
+        body.dark-theme .notification-icon:hover {
+            background: var(--dropdown-hover);
+        }
+        
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            .notification-icon {
+                font-size: 1.2rem;
+                padding: 6px;
+            }
+            .notification-badge {
+                min-width: 16px;
+                height: 16px;
+                font-size: 9px;
+                top: -4px;
+                right: -6px;
+            }
+        }
+        
+        /* Cache info indicator */
+        .cache-info-badge {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            z-index: 9999;
+            font-family: monospace;
+            cursor: pointer;
+        }
+        
+        .cache-info-badge:hover {
+            background: rgba(0,0,0,0.8);
+        }
+        
+        /* Refresh indicator */
+        .refresh-indicator {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            z-index: 9999;
+            font-family: monospace;
+        }
+    </style>
+    
+    <script>
+        // ======================== CACHE MANAGEMENT ========================
+        // Get current version from localStorage or set new one
+        const APP_VERSION = "20250101_v2";
+        const LAST_CLEAR_DATE_KEY = "lastCacheClearDate";
+        
+        function clearOldCache() {
+            // Check if we need to clear cache (once per day)
+            const today = new Date().toDateString();
+            const lastClear = localStorage.getItem(LAST_CLEAR_DATE_KEY);
+            
+            if (lastClear !== today) {
+                console.log("Daily cache cleanup triggered for:", today);
+                
+                // Clear specific caches
+                if ('caches' in window) {
+                    caches.keys().then(function(names) {
+                        for (let name of names) {
+                            if (name.includes('network') || name.includes('css') || name.includes('js')) {
+                                caches.delete(name);
+                                console.log("Deleted cache:", name);
+                            }
+                        }
+                    });
+                }
+                
+                // Clear localStorage items (except user data)
+                const keysToKeep = ['currentUser', 'branchCode', 'selectedBranch', 'theme', 'refreshInterval', 'soundEnabled', LAST_CLEAR_DATE_KEY];
+                const keysToRemove = [];
+                
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (!keysToKeep.includes(key)) {
+                        keysToRemove.push(key);
+                    }
+                }
+                
+                keysToRemove.forEach(key => {
+                    localStorage.removeItem(key);
+                    console.log("Removed localStorage item:", key);
+                });
+                
+                // Set today as last clear date
+                localStorage.setItem(LAST_CLEAR_DATE_KEY, today);
+                
+                // Force reload if needed
+                const urlParams = new URLSearchParams(window.location.search);
+                if (!urlParams.has('nocache')) {
+                    window.location.href = window.location.pathname + '?nocache=' + Date.now();
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // Check if page needs refresh (daily first login)
+        function checkDailyRefresh() {
+            const lastLoginDate = localStorage.getItem('lastLoginDate');
+            const today = new Date().toDateString();
+            
+            if (lastLoginDate !== today) {
+                console.log("First login of the day - clearing session cache");
+                // Clear sessionStorage on first login of the day
+                sessionStorage.clear();
+                localStorage.setItem('lastLoginDate', today);
+                return true;
+            }
+            return false;
+        }
+        
+        // Add version to all script and link URLs
+        function addVersionToResources() {
+            // This is handled by the static version parameters in href/src
+            console.log("App version:", APP_VERSION);
+        }
+        
+        // Display cache info
+        function displayCacheInfo() {
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'cache-info-badge';
+            infoDiv.innerHTML = `📦 Cache: ${localStorage.getItem(LAST_CLEAR_DATE_KEY) || 'Not cleared'} | v${APP_VERSION}`;
+            infoDiv.onclick = function() {
+                if (confirm('Clear all cache and reload?')) {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    if ('caches' in window) {
+                        caches.keys().then(function(names) {
+                            names.forEach(name => caches.delete(name));
+                        });
+                    }
+                    window.location.reload(true);
+                }
+            };
+            document.body.appendChild(infoDiv);
+            
+            const refreshDiv = document.createElement('div');
+            refreshDiv.className = 'refresh-indicator';
+            refreshDiv.innerHTML = `🔄 v${APP_VERSION}`;
+            refreshDiv.onclick = function() {
+                window.location.reload(true);
+            };
+            document.body.appendChild(refreshDiv);
+        }
+        
+        // Mobile redirect with cache check
+        if (window.innerWidth <= 768 || /Mobile|iPhone|iPad|Android/i.test(navigator.userAgent)) {
+            // Clear cache before redirecting to mobile app
+            if (checkDailyRefresh()) {
+                sessionStorage.clear();
+            }
+            window.location.href = "app.html?nocache=" + Date.now();
+        }
+        
+        // Run cache management on page load
+        clearOldCache();
+        checkDailyRefresh();
+        addVersionToResources();
     </script>
 </head>
 <body class="light-theme">
@@ -44,7 +284,6 @@
             <div class="login-card">
                 <div class="login-header">
                     <div class="login-logo">
-                      <!--  <i class="bi bi-compass"></i>-->
                         <img class="top_bar_pic" id="headder_thumb_pic" src="https://profile.mgovcloud.in/file?fs=thumb&amp;ID=2109903&amp;nps=404&amp;allowCORP=true" style="width: 100%; height: 100%;">
                     </div>
                     <h2>NOC Admin</h2>
@@ -60,6 +299,11 @@
                         <input type="password" class="form-control" id="password" placeholder="Enter password">
                     </div>
                     
+                    <!-- Version info -->
+                    <div class="text-center mb-2" style="font-size: 11px; color: var(--text-muted);">
+                        Version: <span id="appVersion"><?= APP_VERSION ?></span>
+                    </div>
+                    
                     <!-- Error Message Footer -->
                     <div class="login-error" id="loginError" style="display: none;">
                         <i class="bi bi-exclamation-triangle-fill"></i>
@@ -70,8 +314,11 @@
                         <span class="spinner-border spinner-border-sm d-none" id="loginSpinner" role="status" aria-hidden="true"></span>
                         <span id="loginText">Login</span>
                     </button> 
-<div style="text-align: center;" ><a href="password-manager.html" target="_blank"> Forgot Password</a> ● <a href="./blog/index.html" target="_blank"> NOC / blog</a> </div>
-
+                    <div style="text-align: center; margin-top: 15px;">
+                        <a href="password-manager.html" target="_blank"> Forgot Password</a> ● 
+                        <a href="./blog/index.html" target="_blank"> NOC / blog</a> ●
+                        <a href="#" onclick="location.reload(true); return false;" style="color: var(--text-muted);"> Refresh</a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -94,8 +341,7 @@
                 <div class="d-flex align-items-center">
                     <a class="navbar-brand" href="#">
                         <div class="logo">
-                             <!--  <i class="bi bi-compass"></i>-->
-                        <img class="top_bar_pic" id="headder_thumb_pic" src="https://profile.mgovcloud.in/file?fs=thumb&amp;ID=2109903&amp;nps=404&amp;allowCORP=true" style="width: 100%; height: 100%;">
+                            <img class="top_bar_pic" src="https://profile.mgovcloud.in/file?fs=thumb&amp;ID=2109903&amp;nps=404&amp;allowCORP=true" style="width: 100%; height: 100%;">
                         </div>
                         <div class="brand-text">
                             <h1>NOC Admin</h1>
@@ -112,8 +358,16 @@
                     </button>
                 </div>
 
-                <!-- Right side: theme toggle only -->
+                <!-- Right side: notification icon + theme toggle -->
                 <div class="d-flex align-items-center">
+                    <!-- Notification Icon -->
+                    <div class="notification-icon-wrapper" id="notificationIconWrapper">
+                        <button class="notification-icon" id="notificationIconBtn" title="Unread Chats">
+                           <i class="bi bi-chat-square-text"></i>
+                        </button>
+                        <span class="notification-badge zero" id="notificationBadge">0</span>
+                    </div>
+                    
                     <div class="theme-switch-wrapper">
                         <label class="theme-switch">
                             <input type="checkbox" id="theme-toggle">
@@ -126,8 +380,6 @@
                 </div>
             </div>
         </nav>
-
-   
 
         <!-- Wrapper: sidebar + content -->
         <div class="wrapper">
@@ -170,8 +422,283 @@
         </div>
     </div>
 
-    <!-- scripts -->
-    <script src="./js/bootstrap.bundle.min.js"></script>
-    <script src="./js/main-script.js"></script>
+    <!-- scripts with cache-busting -->
+    <script src="./js/bootstrap.bundle.min.js?v=20250101"></script>
+    <script src="./js/main-script.js?v=20250101"></script>
+    
+    <script>
+        // Display cache info after DOM load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set version in login screen
+            const versionSpan = document.getElementById('appVersion');
+            if (versionSpan) {
+                versionSpan.textContent = APP_VERSION;
+            }
+            displayCacheInfo();
+        });
+        
+        // ======================== NOTIFICATION CONFIGURATION ========================
+        const CHAT_SPREADSHEET_ID = "1fkiFo1i60NxA_ujl1GhPmNnSLKI6seb3YiMVhPxZjgM";
+        const CHAT_SHEET_NAME = "Chats";
+        const CHAT_API_KEY = "AIzaSyBAuS3Brpsw5JOJnjNJii1UlFa7ClXf8d4";
+        
+        let unreadCheckInterval = null;
+        let lastUnreadCount = 0;
+        let notificationSound = null;
+        let soundEnabled = true;
+        
+        // ======================== INITIALIZE NOTIFICATION SOUND ========================
+        function initNotificationSound() {
+            try {
+                notificationSound = new Audio('./sweet.mp3');
+                notificationSound.volume = 0.5;
+                notificationSound.load();
+                console.log("Notification sound loaded from ./sweet.mp3");
+            } catch(e) {
+                console.log("Audio not supported or file not found:", e);
+                notificationSound = null;
+            }
+        }
+        
+        function playNotificationSound() {
+            if (!soundEnabled) return;
+            
+            try {
+                if (notificationSound) {
+                    notificationSound.currentTime = 0;
+                    notificationSound.play().catch(e => {
+                        console.log("Sound play failed:", e);
+                        // Fallback to simple beep
+                        try {
+                            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            const oscillator = audioCtx.createOscillator();
+                            const gainNode = audioCtx.createGain();
+                            oscillator.connect(gainNode);
+                            gainNode.connect(audioCtx.destination);
+                            oscillator.frequency.value = 880;
+                            gainNode.gain.value = 0.1;
+                            oscillator.start();
+                            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.5);
+                            oscillator.stop(audioCtx.currentTime + 0.5);
+                            audioCtx.resume();
+                        } catch(e2) {}
+                    });
+                }
+            } catch(e) {
+                console.log("Sound play error:", e);
+            }
+        }
+        
+        // ======================== GET CURRENT BRANCH/USER ========================
+        function getCurrentBranchForChat() {
+            if (window.currentUser && window.currentUser.username) {
+                let username = window.currentUser.username.toUpperCase();
+                if (/^BR\d{4}$/i.test(username) || username === "ADMIN") {
+                    return username;
+                }
+            }
+            
+            let branch = localStorage.getItem('branchCode');
+            if (branch && (/^BR\d{4}$/i.test(branch) || branch === "ADMIN")) {
+                return branch.toUpperCase();
+            }
+            
+            branch = localStorage.getItem('selectedBranch');
+            if (branch && (/^BR\d{4}$/i.test(branch) || branch === "ADMIN")) {
+                return branch.toUpperCase();
+            }
+            
+            const sessionUser = sessionStorage.getItem('currentUser');
+            if (sessionUser) {
+                try {
+                    const userData = JSON.parse(sessionUser);
+                    const username = userData.username;
+                    if (username && (/^BR\d{4}$/i.test(username) || username === "ADMIN")) {
+                        return username.toUpperCase();
+                    }
+                } catch(e) {}
+            }
+            
+            return null;
+        }
+        
+        async function fetchUnreadChatCount() {
+            const branch = getCurrentBranchForChat();
+            if (!branch) {
+                updateNotificationBadge(0);
+                return 0;
+            }
+            
+            try {
+                const range = `${CHAT_SHEET_NAME}!A:K`;
+                const url = `https://sheets.googleapis.com/v4/spreadsheets/${CHAT_SPREADSHEET_ID}/values/${range}?key=${CHAT_API_KEY}&_=${Date.now()}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (!data.values || data.values.length <= 1) {
+                    updateNotificationBadge(0);
+                    return 0;
+                }
+                
+                const rows = data.values.slice(1);
+                let unreadCount = 0;
+                
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (row.length >= 3) {
+                        const messageBranch = row[1] ? row[1].toString().toUpperCase() : "";
+                        const readStatus = row[8] ? row[8].toString() : "";
+                        const readBy = row[9] ? row[9].toString() : "";
+                        const allMentionReadBy = row[10] ? row[10].toString() : "";
+                        const messageText = row[2] ? row[2].toString().toLowerCase() : "";
+                        const isAllMention = messageText.includes('@all');
+                        
+                        if (messageBranch !== branch) {
+                            if (!isAllMention && readStatus !== "TRUE" && !readBy.includes(branch)) {
+                                unreadCount++;
+                            }
+                            else if (isAllMention && !allMentionReadBy.includes(branch)) {
+                                unreadCount++;
+                            }
+                        }
+                    }
+                }
+                
+                // Play sound if unread count increased
+                if (unreadCount > lastUnreadCount && unreadCount > 0) {
+                    playNotificationSound();
+                }
+                
+                lastUnreadCount = unreadCount;
+                updateNotificationBadge(unreadCount);
+                return unreadCount;
+                
+            } catch (error) {
+                console.error("Error fetching unread chat count:", error);
+                updateNotificationBadge(0);
+                return 0;
+            }
+        }
+        
+        function updateNotificationBadge(count) {
+            const badge = document.getElementById('notificationBadge');
+            if (!badge) return;
+            
+            if (count > 0) {
+                const wasZero = badge.classList.contains('zero');
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('zero');
+                badge.style.animation = 'pulse-red 0.5s ease-in-out';
+                setTimeout(() => {
+                    badge.style.animation = 'pulse-red 1.5s infinite';
+                }, 500);
+                
+                // Also update document title with notification count
+                if (count > 0) {
+                    document.title = `(${count}) NOC Admin`;
+                } else {
+                    document.title = 'NOC Admin';
+                }
+            } else {
+                badge.textContent = '0';
+                badge.classList.add('zero');
+                document.title = 'NOC Admin';
+            }
+        }
+        
+        function openChatInIframe() {
+            const chatUrl = "./chat.html?t=" + Date.now();
+            const iframe = document.getElementById('content-frame');
+            const loading = document.getElementById('loading');
+            const welcomeMessage = document.getElementById('welcome-message');
+            
+            if (welcomeMessage) welcomeMessage.style.display = 'none';
+            if (loading) loading.style.display = 'flex';
+            
+            iframe.onload = function() { 
+                if (loading) loading.style.display = 'none'; 
+                // Reset badge after opening chat
+                setTimeout(() => {
+                    fetchUnreadChatCount();
+                }, 3000);
+            };
+            
+            iframe.onerror = function() { 
+                if (loading) loading.style.display = 'none'; 
+                console.error('Error loading chat page');
+            };
+            
+            iframe.src = chatUrl;
+        }
+        
+        function startUnreadCheckInterval() {
+            if (unreadCheckInterval) clearInterval(unreadCheckInterval);
+            fetchUnreadChatCount();
+            unreadCheckInterval = setInterval(() => {
+                if (window.isAuthenticated) {
+                    fetchUnreadChatCount();
+                }
+            }, 10000);
+        }
+        
+        function stopUnreadCheckInterval() {
+            if (unreadCheckInterval) {
+                clearInterval(unreadCheckInterval);
+                unreadCheckInterval = null;
+            }
+        }
+        
+        function initNotificationSystem() {
+            initNotificationSound();
+            
+            const notificationBtn = document.getElementById('notificationIconBtn');
+            if (notificationBtn) {
+                notificationBtn.removeEventListener('click', openChatInIframe);
+                notificationBtn.addEventListener('click', openChatInIframe);
+            }
+            startUnreadCheckInterval();
+        }
+        
+        // Function to toggle sound on/off (can be called from a button)
+        window.toggleNotificationSound = function() {
+            soundEnabled = !soundEnabled;
+            localStorage.setItem('notificationSoundEnabled', soundEnabled);
+            const soundIcon = document.getElementById('notificationSoundIcon');
+            if (soundIcon) {
+                soundIcon.innerHTML = soundEnabled ? '<i class="bi bi-volume-up-fill"></i>' : '<i class="bi bi-volume-mute-fill"></i>';
+            }
+            console.log("Notification sound:", soundEnabled ? "Enabled" : "Disabled");
+            return soundEnabled;
+        };
+        
+        // Load sound preference
+        const savedSoundPref = localStorage.getItem('notificationSoundEnabled');
+        if (savedSoundPref !== null) {
+            soundEnabled = savedSoundPref === 'true';
+        }
+        
+        const originalLogout = window.logout;
+        if (originalLogout) {
+            window.logout = function() {
+                stopUnreadCheckInterval();
+                originalLogout();
+            };
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const checkAuthInterval = setInterval(() => {
+                if (window.isAuthenticated === true) {
+                    clearInterval(checkAuthInterval);
+                    setTimeout(() => {
+                        initNotificationSystem();
+                    }, 2000);
+                }
+            }, 500);
+        });
+        
+        window.fetchUnreadChatCount = fetchUnreadChatCount;
+        window.openChatInIframe = openChatInIframe;
+        window.getCurrentBranchForChat = getCurrentBranchForChat;
+    </script>
 </body>
 </html>

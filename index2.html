@@ -30,6 +30,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="NOC Admin">
+ <script>
+        // Mobile redirect
+        if (window.innerWidth <= 768 || /Mobile|iPhone|iPad|Android/i.test(navigator.userAgent)) {
+            window.location.href = "app.html";
+        }
+    </script>
 </head>
 <body class="light-theme">
     <!-- Login Overlay -->
@@ -64,7 +70,7 @@
                         <span class="spinner-border spinner-border-sm d-none" id="loginSpinner" role="status" aria-hidden="true"></span>
                         <span id="loginText">Login</span>
                     </button> 
-<div style="text-align: center;" ><a href="password-manager.html" target="_blank"> Forgot Password</a></div>
+<div style="text-align: center;" ><a href="password-manager.html" target="_blank"> Forgot Password</a> ● <a href="./blog/index.html" target="_blank"> NOC / blog</a> </div>
 
                 </div>
             </div>

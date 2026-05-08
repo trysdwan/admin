@@ -1,9 +1,24 @@
-<!-- post.html - Updated with URL Parameter Support for Category and Author -->
+<!-- post.html - Updated with TTS Widget -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+ 
+<!-- Open Graph Meta Tags for Social Sharing -->
+<meta property="og:title" content="Blog Post | NOC / blog">
+<meta property="og:description" content="Read this article on NOC Blog">
+<meta property="og:image" content="">
+<meta property="og:url" content="">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="NOC Blog">
+
+<!-- Twitter Card Meta Tags -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Blog Post | NOC / blog">
+<meta name="twitter:description" content="Read this article on NOC Blog">
+<meta name="twitter:image" content="">
+
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="../images/favicon.svg">
     <link rel="stylesheet" href="css/bootstrap.min.css">
@@ -161,15 +176,8 @@
             transform: translateY(-2px);
             box-shadow: var(--shadow-md);
         }
-        @media (max-width: 768px) {
-            .related-slider-section .section-header h3 {
-                font-size: 1.25rem;
-            }
-            .btn-back-home {
-                padding: 0.5rem 1.5rem;
-                font-size: 0.85rem;
-            }
-        }
+        
+        
     </style>
 </head>
 <body>

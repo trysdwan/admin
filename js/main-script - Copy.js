@@ -10,205 +10,13 @@ const ICON_RANGE = 'A:F';
 const LOGIN_RANGE = 'B:D';
 const FLASH_RANGE = 'A:A';
 
-// Add cache-busting timestamp to all API calls
-const CACHE_BUST = Date.now();
-
-// Chat configuration for notification system
-const CHAT_SPREADSHEET_ID = "1fkiFo1i60NxA_ujl1GhPmNnSLKI6seb3YiMVhPxZjgM";
-const CHAT_SHEET_NAME = "Chats";
-const CHAT_API_KEY = "AIzaSyBAuS3Brpsw5JOJnjNJii1UlFa7ClXf8d4";
-
 let menuData = [];
 let iconData = new Map();
 let isAuthenticated = false;
 let currentUser = null;
 let flashNewsInterval = null;
-let unreadCheckInterval = null;
-let lastUnreadCount = 0;
-let notificationSound = null;
-let soundEnabled = true;
-let audioContext = null;
-let userInteracted = false;
 
-// Make variables globally accessible for notification system
-window.isAuthenticated = false;
-window.currentUser = null;
-
-// ======================== NOTIFICATION SOUND FUNCTIONS ========================
-function initNotificationSound() {
-    try {
-        // Try to load Audio element first
-        notificationSound = new Audio('./sweet.mp3');
-        notificationSound.volume = 0.5;
-        notificationSound.load();
-        console.log("Notification sound loaded from ./sweet.mp3");
-        
-        // Also initialize Web Audio API context for fallback (suspended initially)
-        if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            // Keep it suspended until user interaction
-            console.log("Web Audio API context created (suspended)");
-        }
-    } catch(e) {
-        console.log("Audio not supported or file not found:", e);
-        notificationSound = null;
-    }
-}
-
-// Call this function on user interaction (click, touch, etc.)
-function enableAudioOnUserInteraction() {
-    if (userInteracted) return;
-    userInteracted = true;
-    
-    console.log("User interaction detected - enabling audio");
-    
-    // Resume Web Audio context if it exists
-    if (audioContext && audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-            console.log("AudioContext resumed successfully");
-        }).catch(e => {
-            console.log("Failed to resume AudioContext:", e);
-        });
-    }
-    
-    // Try to play and immediately pause a silent sound to unlock audio
-    if (notificationSound) {
-        try {
-            notificationSound.volume = 0;
-            notificationSound.play().then(() => {
-                notificationSound.pause();
-                notificationSound.currentTime = 0;
-                notificationSound.volume = 0.5;
-                console.log("Audio unlocked via silent playback");
-            }).catch(e => {
-                console.log("Silent playback failed:", e);
-            });
-        } catch(e) {
-            console.log("Error unlocking audio:", e);
-        }
-    }
-}
-
-// Set up global event listeners to capture first user interaction
-function setupUserInteractionListener() {
-    const events = ['click', 'touchstart', 'keydown', 'mousedown'];
-    const handler = function() {
-        enableAudioOnUserInteraction();
-        // Remove listeners after first interaction
-        events.forEach(event => {
-            document.removeEventListener(event, handler);
-        });
-    };
-    
-    events.forEach(event => {
-        document.addEventListener(event, handler);
-    });
-}
-
-function playNotificationSound() {
-    if (!soundEnabled) {
-        console.log("Sound disabled by user");
-        return;
-    }
-    
-    // Try to play with Audio element
-    if (notificationSound) {
-        try {
-            notificationSound.currentTime = 0;
-            const playPromise = notificationSound.play();
-            
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    console.log("Notification sound played successfully");
-                }).catch(error => {
-                    console.log("Audio play failed:", error.message);
-                    // Fallback to Web Audio beep if available
-                    playFallbackBeep();
-                });
-            }
-        } catch(e) {
-            console.log("Sound play error:", e);
-            playFallbackBeep();
-        }
-    } else {
-        playFallbackBeep();
-    }
-}
-
-function playFallbackBeep() {
-    // Only play if user has interacted OR audio context is already running
-    if (!userInteracted && (!audioContext || audioContext.state !== 'running')) {
-        console.log("Waiting for user interaction before playing beep");
-        return;
-    }
-    
-    try {
-        // Use existing audio context or create a new one
-        let ctx = audioContext;
-        if (!ctx) {
-            ctx = new (window.AudioContext || window.webkitAudioContext)();
-            audioContext = ctx;
-        }
-        
-        // Resume if suspended
-        if (ctx.state === 'suspended') {
-            ctx.resume().then(() => {
-                playBeepWithContext(ctx);
-            }).catch(e => console.log("Cannot resume AudioContext:", e));
-        } else if (ctx.state === 'running') {
-            playBeepWithContext(ctx);
-        } else {
-            // Create a one-time context for this beep only
-            const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
-            tempCtx.resume().then(() => {
-                playBeepWithContext(tempCtx);
-                // Close after beep to clean up
-                setTimeout(() => tempCtx.close(), 500);
-            }).catch(e => console.log("Cannot create temp context:", e));
-        }
-    } catch(e) {
-        console.log("Fallback beep failed:", e);
-    }
-}
-
-function playBeepWithContext(ctx) {
-    try {
-        const oscillator = ctx.createOscillator();
-        const gainNode = ctx.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(ctx.destination);
-        oscillator.frequency.value = 880;
-        gainNode.gain.value = 0.15;
-        oscillator.start();
-        gainNode.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.4);
-        oscillator.stop(ctx.currentTime + 0.4);
-        console.log("Fallback beep played");
-    } catch(e) {
-        console.log("Beep playback failed:", e);
-    }
-}
-
-function toggleNotificationSound() {
-    soundEnabled = !soundEnabled;
-    localStorage.setItem('notificationSoundEnabled', soundEnabled);
-    console.log("Notification sound:", soundEnabled ? "Enabled" : "Disabled");
-    
-    // Update sound icon if exists
-    const soundIcon = document.getElementById('notificationSoundIcon');
-    if (soundIcon) {
-        soundIcon.innerHTML = soundEnabled ? '<i class="bi bi-volume-up-fill"></i>' : '<i class="bi bi-volume-mute-fill"></i>';
-    }
-    
-    return soundEnabled;
-}
-
-// Load sound preference
-const savedSoundPref = localStorage.getItem('notificationSoundEnabled');
-if (savedSoundPref !== null) {
-    soundEnabled = savedSoundPref === 'true';
-}
-
-// ======================== THEME FUNCTIONS ========================
+// Theme functions
 function initTheme() {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const savedTheme = localStorage.getItem('theme');
@@ -230,7 +38,7 @@ function toggleTheme() {
     localStorage.setItem('theme', newTheme);
 }
 
-// ======================== LOGIN ERROR FUNCTIONS ========================
+// Show error message in login footer
 function showLoginError(message) {
     const errorDiv = document.getElementById('loginError');
     const errorText = document.getElementById('errorMessageText');
@@ -244,6 +52,7 @@ function showLoginError(message) {
     }
 }
 
+// Hide error message
 function hideLoginError() {
     const errorDiv = document.getElementById('loginError');
     if (errorDiv) {
@@ -251,180 +60,7 @@ function hideLoginError() {
     }
 }
 
-// ======================== NOTIFICATION SYSTEM FUNCTIONS ========================
-function getCurrentBranchForChat() {
-    // First check if currentUser exists from login
-    if (currentUser && currentUser.username) {
-        let username = currentUser.username.toUpperCase();
-        if (/^BR\d{4}$/i.test(username) || username === "ADMIN") {
-            return username;
-        }
-    }
-    
-    // Check localStorage for branch
-    let branch = localStorage.getItem('branchCode');
-    if (branch && (/^BR\d{4}$/i.test(branch) || branch === "ADMIN")) {
-        return branch.toUpperCase();
-    }
-    
-    branch = localStorage.getItem('selectedBranch');
-    if (branch && (/^BR\d{4}$/i.test(branch) || branch === "ADMIN")) {
-        return branch.toUpperCase();
-    }
-    
-    // Check sessionStorage for currentUser
-    const sessionUser = sessionStorage.getItem('currentUser');
-    if (sessionUser) {
-        try {
-            const userData = JSON.parse(sessionUser);
-            const username = userData.username;
-            if (username && (/^BR\d{4}$/i.test(username) || username === "ADMIN")) {
-                return username.toUpperCase();
-            }
-        } catch(e) {}
-    }
-    
-    return null;
-}
-
-async function fetchUnreadChatCount() {
-    const branch = getCurrentBranchForChat();
-    if (!branch) {
-        console.log("No branch found for unread chat check");
-        updateNotificationBadge(0);
-        return 0;
-    }
-    
-    try {
-        const range = `${CHAT_SHEET_NAME}!A:K`;
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CHAT_SPREADSHEET_ID}/values/${range}?key=${CHAT_API_KEY}&_=${Date.now()}`;
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (!data.values || data.values.length <= 1) {
-            updateNotificationBadge(0);
-            return 0;
-        }
-        
-        const rows = data.values.slice(1);
-        let unreadCount = 0;
-        
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            if (row.length >= 3) {
-                const messageBranch = row[1] ? row[1].toString().toUpperCase() : "";
-                const readStatus = row[8] ? row[8].toString() : "";
-                const readBy = row[9] ? row[9].toString() : "";
-                const allMentionReadBy = row[10] ? row[10].toString() : "";
-                const messageText = row[2] ? row[2].toString().toLowerCase() : "";
-                const isAllMention = messageText.includes('@all');
-                
-                if (messageBranch !== branch) {
-                    if (!isAllMention && readStatus !== "TRUE" && !readBy.includes(branch)) {
-                        unreadCount++;
-                    }
-                    else if (isAllMention && !allMentionReadBy.includes(branch)) {
-                        unreadCount++;
-                    }
-                }
-            }
-        }
-        
-        // Play sound if unread count increased (only after user interaction)
-        if (unreadCount > lastUnreadCount && unreadCount > 0) {
-            // Schedule sound play - will only work if user has interacted
-            setTimeout(() => playNotificationSound(), 100);
-        }
-        
-        lastUnreadCount = unreadCount;
-        updateNotificationBadge(unreadCount);
-        return unreadCount;
-        
-    } catch (error) {
-        console.error("Error fetching unread chat count:", error);
-        updateNotificationBadge(0);
-        return 0;
-    }
-}
-
-function updateNotificationBadge(count) {
-    const badge = document.getElementById('notificationBadge');
-    if (!badge) return;
-    
-    if (count > 0) {
-        badge.textContent = count > 99 ? '99+' : count;
-        badge.classList.remove('zero');
-        badge.style.animation = 'pulse-red 0.5s ease-in-out';
-        setTimeout(() => {
-            if (badge) badge.style.animation = 'pulse-red 1.5s infinite';
-        }, 500);
-        
-        // Update document title with notification count
-        document.title = `(${count}) NOC Admin`;
-    } else {
-        badge.textContent = '0';
-        badge.classList.add('zero');
-        document.title = 'NOC Admin';
-    }
-}
-
-function openChatInIframe() {
-    const chatUrl = "./chat.html?t=" + Date.now();
-    const iframe = document.getElementById('content-frame');
-    const loading = document.getElementById('loading');
-    const welcomeMessage = document.getElementById('welcome-message');
-    
-    if (welcomeMessage) welcomeMessage.style.display = 'none';
-    if (loading) loading.style.display = 'flex';
-    
-    iframe.onload = function() { 
-        if (loading) loading.style.display = 'none'; 
-        // Reset badge after opening chat
-        setTimeout(() => {
-            fetchUnreadChatCount();
-        }, 3000);
-    };
-    
-    iframe.onerror = function() { 
-        if (loading) loading.style.display = 'none'; 
-        console.error('Error loading chat page');
-    };
-    
-    iframe.src = chatUrl;
-}
-
-function startUnreadCheckInterval() {
-    if (unreadCheckInterval) clearInterval(unreadCheckInterval);
-    
-    fetchUnreadChatCount();
-    
-    unreadCheckInterval = setInterval(() => {
-        if (isAuthenticated) {
-            fetchUnreadChatCount();
-        }
-    }, 10000);
-}
-
-function stopUnreadCheckInterval() {
-    if (unreadCheckInterval) {
-        clearInterval(unreadCheckInterval);
-        unreadCheckInterval = null;
-    }
-}
-
-function initNotificationSystem() {
-    initNotificationSound();
-    setupUserInteractionListener(); // Set up listeners for first user interaction
-    
-    const notificationBtn = document.getElementById('notificationIconBtn');
-    if (notificationBtn) {
-        notificationBtn.removeEventListener('click', openChatInIframe);
-        notificationBtn.addEventListener('click', openChatInIframe);
-    }
-    startUnreadCheckInterval();
-}
-
-// ======================== FLASH NEWS FUNCTIONS ========================
+// Flash News Functions
 async function fetchAndDisplayFlashNews() {
     const flashContainer = document.getElementById('flashNewsContainer');
     const flashTicker = document.getElementById('flashNewsTicker');
@@ -432,7 +68,8 @@ async function fetchAndDisplayFlashNews() {
     if (!flashContainer || !flashTicker) return;
     
     try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${FLASH_SHEET}!A2:A?key=${API_KEY}&_=${Date.now()}`;
+        // Fetch from A2:A range (starting from row 2 to skip header)
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${FLASH_SHEET}!A2:A?key=${API_KEY}`;
         const response = await fetch(url);
         const data = await response.json();
         
@@ -445,11 +82,13 @@ async function fetchAndDisplayFlashNews() {
         
         let newsItems = [];
         if (data.values && data.values.length > 0) {
+            // Filter out empty cells, undefined, null, and whitespace-only strings
             newsItems = data.values
                 .map(row => row[0] ? row[0].toString().trim() : '')
                 .filter(text => text !== '' && text !== null && text !== undefined);
         }
         
+        // Check if there are any valid news items
         if (newsItems.length === 0) {
             console.log('No scroll texts found in A2:A range, hiding ticker');
             flashContainer.classList.add('hidden');
@@ -457,20 +96,27 @@ async function fetchAndDisplayFlashNews() {
             return;
         }
         
+        // Build ticker HTML with icon and text - NO DUPLICATION
         let tickerHtml = '';
         newsItems.forEach((item) => {
             tickerHtml += `<span><i class="bi bi-megaphone-fill"></i> ${escapeHtml(item)}</span>`;
         });
         
+        // Calculate scroll speed based on number of items and total content width
+        // Slower speed for more content, faster for less content
         const totalItems = newsItems.length;
+        // Base speed: 25 seconds, adjusted by item count (more items = slower speed)
+        // Range: 15 seconds (min) to 40 seconds (max)
         let scrollDuration = Math.min(40, Math.max(15, 25 + (totalItems * 0.5)));
         
         flashTicker.innerHTML = tickerHtml;
         
+        // Remove existing animation and reapply with new duration
         flashTicker.style.animation = 'none';
-        flashTicker.offsetHeight;
+        flashTicker.offsetHeight; // Force reflow
         flashTicker.style.animation = `scroll-left ${scrollDuration}s linear infinite`;
         
+        // Show the container
         flashContainer.classList.remove('hidden');
         adjustWrapperHeightForTicker();
         
@@ -508,10 +154,10 @@ function adjustWrapperHeightForTicker() {
     wrapper.style.height = `${viewportHeight - navbarHeight - tickerHeight}px`;
 }
 
-// ======================== LOGIN FUNCTIONS ========================
+// Login validation
 async function validateLogin(username, password) {
     try {
-        const loginUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${LOGIN_SHEET}!${LOGIN_RANGE}?key=${API_KEY}&_=${Date.now()}`;
+        const loginUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${LOGIN_SHEET}!${LOGIN_RANGE}?key=${API_KEY}`;
         const response = await fetch(loginUrl);
         const data = await response.json();
         
@@ -551,6 +197,7 @@ async function validateLogin(username, password) {
     }
 }
 
+// Login handler
 async function handleLogin() {
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value.trim();
@@ -578,10 +225,6 @@ async function handleLogin() {
             isAuthenticated = true;
             currentUser = userData;
             
-            // Update global variables
-            window.isAuthenticated = true;
-            window.currentUser = userData;
-            
             localStorage.setItem('currentUser', JSON.stringify({
                 username: userData.username,
                 loginTime: new Date().toISOString(),
@@ -602,7 +245,6 @@ async function handleLogin() {
                 loadMenuData(userData.menuSheet);
                 setTimeout(() => {
                     fetchAndDisplayFlashNews();
-                    initNotificationSystem();
                 }, 100);
             }, 500);
         } else {
@@ -623,16 +265,12 @@ async function handleLogin() {
     }
 }
 
+// Logout function
 function logout() {
-    stopUnreadCheckInterval();
-    
     localStorage.removeItem('currentUser');
     sessionStorage.removeItem('currentUser');
     currentUser = null;
     isAuthenticated = false;
-    
-    window.isAuthenticated = false;
-    window.currentUser = null;
     
     const loginOverlay = document.getElementById('loginOverlay');
     const dashboardContainer = document.getElementById('dashboardContainer');
@@ -649,29 +287,18 @@ function logout() {
     document.getElementById('username').value = '';
     document.getElementById('password').value = '';
     
-    // Reset notification badge
-    updateNotificationBadge(0);
-    lastUnreadCount = 0;
-    
-    // Reset document title
-    document.title = 'NOC Admin';
-    
-    // Reset user interaction flag
-    userInteracted = false;
-    
     setTimeout(() => {
         document.getElementById('username').focus();
     }, 100);
 }
 
-// ======================== USER DISPLAY FUNCTIONS ========================
+// Display logged-in user in sidebar
 function displayLoggedInUser() {
     const storedUser = localStorage.getItem('currentUser');
     if (storedUser) {
         try {
             const userData = JSON.parse(storedUser);
             currentUser = userData;
-            window.currentUser = userData;
             
             const existingDesktopUser = document.getElementById('desktopUserInfo');
             if (existingDesktopUser) existingDesktopUser.remove();
@@ -730,6 +357,7 @@ function displayLoggedInUser() {
     }
 }
 
+// Check for existing session
 function checkExistingSession() {
     const storedUser = localStorage.getItem('currentUser');
     if (storedUser) {
@@ -746,8 +374,6 @@ function checkExistingSession() {
             
             isAuthenticated = true;
             currentUser = userData;
-            window.isAuthenticated = true;
-            window.currentUser = userData;
             
             const loginOverlay = document.getElementById('loginOverlay');
             const dashboardContainer = document.getElementById('dashboardContainer');
@@ -758,7 +384,6 @@ function checkExistingSession() {
             loadMenuData(userData.menuSheet);
             setTimeout(() => {
                 fetchAndDisplayFlashNews();
-                initNotificationSystem();
             }, 100);
         } catch (e) {
             console.error('Error restoring session:', e);
@@ -767,7 +392,7 @@ function checkExistingSession() {
     }
 }
 
-// ======================== MENU DATA FUNCTIONS ========================
+// Menu data functions
 function processIconData(rows) {
     if (!rows || rows.length < 2) return;
     for (let i = 1; i < rows.length; i++) {
@@ -851,7 +476,7 @@ async function fetchSheetData(menuSheetName) {
         
         iconData.clear();
         
-        const menuUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${menuSheetName}!${MENU_RANGE}?key=${API_KEY}&_=${Date.now()}`;
+        const menuUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${menuSheetName}!${MENU_RANGE}?key=${API_KEY}`;
         const menuResponse = await fetch(menuUrl);
         const menuData_raw = await menuResponse.json();
         
@@ -860,7 +485,7 @@ async function fetchSheetData(menuSheetName) {
             throw new Error(`Menu sheet '${menuSheetName}' not found or inaccessible`);
         }
         
-        const iconUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ICON_SHEET}!${ICON_RANGE}?key=${API_KEY}&_=${Date.now()}`;
+        const iconUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ICON_SHEET}!${ICON_RANGE}?key=${API_KEY}`;
         const iconResponse = await fetch(iconUrl);
         const iconData_raw = await iconResponse.json();
         if (!iconData_raw.error) processIconData(iconData_raw.values);
@@ -960,13 +585,6 @@ function loadUrlInIframe(url) {
     
     let fullUrl = url;
     
-    // Add cache-busting to URLs
-    if (fullUrl.includes('?')) {
-        fullUrl += `&_=${Date.now()}`;
-    } else {
-        fullUrl += `?_=${Date.now()}`;
-    }
-    
     if (url.includes('treasury-status') && currentUser && currentUser.branch) {
         const separator = url.includes('?') ? '&' : '?';
         fullUrl = `${url}${separator}branch=${encodeURIComponent(currentUser.branch)}`;
@@ -993,7 +611,7 @@ function initDesktopSidebarToggle() {
     });
 }
 
-// ======================== INITIALIZATION ========================
+// Initialize everything
 document.addEventListener('DOMContentLoaded', function() {
     initTheme();
     
@@ -1081,7 +699,3 @@ if ('serviceWorker' in navigator) {
 window.fetchAndDisplayFlashNews = fetchAndDisplayFlashNews;
 window.adjustWrapperHeightForTicker = adjustWrapperHeightForTicker;
 window.logout = logout;
-window.fetchUnreadChatCount = fetchUnreadChatCount;
-window.openChatInIframe = openChatInIframe;
-window.getCurrentBranchForChat = getCurrentBranchForChat;
-window.toggleNotificationSound = toggleNotificationSound;
