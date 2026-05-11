@@ -384,7 +384,7 @@
         }
         
         .form-control {
-            border-radius: 24px;
+            border-radius: 24px !important;
             border: none;
             resize: none;
             font-size: 0.9rem;
@@ -395,18 +395,19 @@
         
         .form-control:focus {
             border: none;
-            box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.2);
+            box-shadow: 0 1px 2px rgb(0 123 255 / 34%);
             outline: none;
         }
         
         /* WhatsApp iPhone style send button */
         .send-btn {
-            border-radius: 50%;
+            border-radius: 50% !important;
             width: 44px;
             height: 44px;
             padding: 0;
-            background: #25d366;
-            border: none;
+            background: #007bff;
+            border-color: #007bff;
+           
             display: flex;
             align-items: center;
             justify-content: center;
@@ -420,7 +421,8 @@
         }
         
         .send-btn:hover {
-            background: #20b859;
+            background: #0069d9;
+            border-color: #0062cc;
             transform: scale(1.02);
         }
         

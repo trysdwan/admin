@@ -25,33 +25,148 @@ let isCommentPending = false;
 let allPostsMaster = [];
 let relatedSwiper = null;
 
-// Get text to read (title + content without HTML) with sentence splitting
+// Helper function to create URL-friendly slug from title
+function createSlug(title) {
+    return title
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .trim();
+}
+
+// Get the full absolute URL for sharing
+function getFullShareUrl(postId) {
+    // Get the current origin (protocol + domain)
+    const origin = window.location.origin;
+    // Get the current path without filename
+    const path = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+    // Construct the full URL
+    return `${origin}${path}post.html?id=${postId}`;
+}
+
+// Get current page URL (for meta tags)
+function getCurrentPageUrl(postId) {
+    return `post.html?id=${postId}`;
+}
+
+// Get post ID from URL (only supports id parameter now)
+function getPostIdFromUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlId = urlParams.get('id');
+    if (urlId && !isNaN(parseInt(urlId))) {
+        return urlId;
+    }
+    return null;
+}
+
+// Get text to read (title + author details + content without HTML) with sentence splitting
 function getTTSContent() {
     const titleElement = document.querySelector('.blog-title');
     const contentElement = document.querySelector('.blog-content');
     
+    let authorName = '';
+    let authorDesignation = '';
+    let publishedDate = '';
+    
+    const authorLinkElement = document.querySelector('.author-link[data-author]');
+    if (authorLinkElement) {
+        authorName = authorLinkElement.getAttribute('data-author') || authorLinkElement.innerText.trim();
+    } else {
+        const authorElement = document.querySelector('.author-link');
+        if (authorElement) {
+            authorName = authorElement.innerText.trim();
+        }
+    }
+    
+    const designationElement = document.querySelector('.author-link + div .small.text-muted, .author-link ~ div .small.text-muted, [data-designation]');
+    if (designationElement) {
+        authorDesignation = designationElement.getAttribute('data-designation') || designationElement.innerText.trim();
+    }
+    
+    const dateElement = document.querySelector('.blog-meta span i.bi-calendar3')?.parentElement;
+    if (dateElement) {
+        publishedDate = dateElement.innerText.trim();
+    } else {
+        const metaSpans = document.querySelectorAll('.blog-meta span');
+        for (let span of metaSpans) {
+            if (span.innerHTML.includes('bi-calendar3')) {
+                publishedDate = span.innerText.trim();
+                break;
+            }
+        }
+    }
+    
+    if (!publishedDate && currentPost && currentPost.publishedTime) {
+        publishedDate = currentPost.publishedTime;
+    }
+    
     let text = '';
+    
     if (titleElement) {
         text += titleElement.innerText.trim() + '. ';
     }
+    
+    let authorText = '';
+    if (authorName && authorName !== 'Anonymous') {
+        authorText = `Written by ${authorName}. `;
+        
+        if (authorDesignation && authorDesignation.trim()) {
+            authorText += ` :: ${authorDesignation}. `;
+        }
+    } else if (authorName === 'Anonymous') {
+        authorText = '';
+    }
+    
+    if (publishedDate && publishedDate.trim()) {
+        if (authorText) {
+            authorText += `Published on ${publishedDate}. `;
+        } else {
+            authorText = `This article was published on ${publishedDate}. `;
+        }
+    }
+    
+    if (authorText) {
+        text += authorText;
+    }
+    
+    text += ' "".."".. ';
+    
     if (contentElement) {
         text += contentElement.innerText.trim();
     }
+    
     text = text.replace(/\s+/g, ' ').trim();
     
-    // Split into sentences for highlighting
+    console.log('TTS Text generated:', text.substring(0, 200) + '...');
+    
     ttsSentences = text.match(/[^.!?]+[.!?]+/g) || [text];
     ttsSentences = ttsSentences.map(s => s.trim()).filter(s => s.length > 0);
     
     return text;
 }
 
-// Highlight current sentence being read
+function refreshTTSContent() {
+    ttsText = getTTSContent();
+    updateTTSDuration();
+    
+    if (isPlaying) {
+        const progressBar = document.getElementById('ttsProgressBar');
+        const currentProgress = progressBar ? parseFloat(progressBar.value) : 0;
+        stopTTSPlayback();
+        startTTSPlayback();
+        setTimeout(() => {
+            if (progressBar && currentDuration) {
+                progressBar.value = currentProgress;
+            }
+        }, 100);
+    }
+}
+
 function highlightCurrentSentence(index) {
     const contentElement = document.querySelector('.blog-content');
     if (!contentElement) return;
     
-    // Remove all existing highlights
     document.querySelectorAll('.tts-sentence-highlight').forEach(el => {
         el.classList.remove('tts-sentence-highlight');
     });
@@ -60,6 +175,10 @@ function highlightCurrentSentence(index) {
     
     const sentenceToFind = ttsSentences[index];
     if (!sentenceToFind) return;
+    
+    if (sentenceToFind.includes('Posted by') || sentenceToFind.includes('Published on') || sentenceToFind.includes('Now reading the article')) {
+        return;
+    }
     
     const searchText = sentenceToFind.substring(0, 50).trim();
     const paragraphs = contentElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div:not(.action-bar)');
@@ -79,7 +198,6 @@ function highlightCurrentSentence(index) {
     }
 }
 
-// Get character index at sentence boundary
 function getSentenceBoundary(charIndex) {
     let charCount = 0;
     for (let i = 0; i < ttsSentences.length; i++) {
@@ -91,7 +209,6 @@ function getSentenceBoundary(charIndex) {
     return 0;
 }
 
-// Get available voices and populate dropdown
 function loadVoices() {
     return new Promise((resolve) => {
         const voices = speechSynthesis.getVoices();
@@ -115,7 +232,6 @@ function populateVoiceList(voices) {
     
     voiceSelect.innerHTML = '<option value="">Select Voice</option>';
     
-    // Filter English voices and sort by name
     const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
     
     englishVoices.forEach((voice, index) => {
@@ -128,31 +244,21 @@ function populateVoiceList(voices) {
         voiceSelect.appendChild(option);
     });
     
-    // Set default voice if none selected
     if (!currentVoice && englishVoices.length > 0) {
         currentVoice = englishVoices[0];
         if (voiceSelect) voiceSelect.value = 0;
     }
 }
+
 function setVoice(voiceIndex) {
     if (availableVoices[voiceIndex]) {
         currentVoice = availableVoices[voiceIndex];
         localStorage.setItem('ttsVoiceIndex', voiceIndex);
         localStorage.setItem('ttsVoiceName', currentVoice.name);
         
-        // If currently playing, restart with new voice
         if (isPlaying) {
-            const wasPlaying = isPlaying;
-            const progressBar = document.getElementById('ttsProgressBar');
-            const currentProgress = progressBar ? parseFloat(progressBar.value) : 0;
             stopTTSPlayback();
             startTTSPlayback();
-            // Seek to approximately the same position (simplified)
-            setTimeout(() => {
-                if (progressBar && currentDuration) {
-                    progressBar.value = currentProgress;
-                }
-            }, 100);
         }
     }
 }
@@ -176,17 +282,6 @@ function loadVoicePreference() {
     }
 }
 
-// Speed presets
-const speedPresets = [
-    { value: 0.75, label: '0.75x (Slow)' },
-    { value: 1.0, label: '1x (Normal)' },
-    { value: 1.15, label: '1.15x (Default)' },
-    { value: 1.5, label: '1.5x' },
-    { value: 2.0, label: '2x' },
-    { value: 2.5, label: '2.5x (Fast)' }
-];
-
-
 function setSpeed(speedValue) {
     currentSpeed = parseFloat(speedValue);
     if (currentUtterance) {
@@ -195,12 +290,12 @@ function setSpeed(speedValue) {
     localStorage.setItem('ttsSpeed', currentSpeed);
     updateTTSDuration();
 }
+
 function initTTSWidget() {
     const blogContentWrapper = document.querySelector('.blog-content-wrapper');
     if (!blogContentWrapper) return;
     if (document.querySelector('.tts-widget')) return;
     
-    // Simplified widget - only play button, progress bar, time, and settings button
     const ttsWidgetHtml = `
         <div class="tts-widget">
             <div class="tts-controls">
@@ -239,6 +334,10 @@ function initTTSWidget() {
     
     ttsText = getTTSContent();
     updateTTSDuration();
+    
+    setTimeout(() => {
+        refreshTTSContent();
+    }, 500);
 }
 
 function initTTSSettingsModal() {
@@ -252,7 +351,6 @@ function initTTSSettingsModal() {
                     <button class="tts-settings-close" onclick="closeTTSSettings()">&times;</button>
                 </div>
                 <div class="tts-settings-body">
-                    <!-- Voice Selection -->
                     <div class="tts-setting-group">
                         <label><i class="bi bi-mic"></i> Voice Selection</label>
                         <select id="voiceSelect" class="tts-select-full">
@@ -260,7 +358,6 @@ function initTTSSettingsModal() {
                         </select>
                     </div>
                     
-                    <!-- Speed Control -->
                     <div class="tts-setting-group">
                         <label><i class="bi bi-speedometer2"></i> Reading Speed</label>
                         <div class="speed-control">
@@ -277,7 +374,6 @@ function initTTSSettingsModal() {
                         </div>
                     </div>
                     
-                    <!-- Auto-scroll Toggle -->
                     <div class="tts-setting-group">
                         <div class="form-switch">
                             <input class="form-check-input" type="checkbox" id="autoScrollToggle" checked>
@@ -294,7 +390,6 @@ function initTTSSettingsModal() {
     
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     
-    // Voice selection event listener
     const voiceSelect = document.getElementById('voiceSelect');
     if (voiceSelect) {
         voiceSelect.addEventListener('change', function() {
@@ -304,7 +399,6 @@ function initTTSSettingsModal() {
         });
     }
     
-    // Speed slider event listener
     const speedSlider = document.getElementById('speedSlider');
     const speedValue = document.getElementById('speedValue');
     
@@ -317,7 +411,6 @@ function initTTSSettingsModal() {
         });
     }
     
-    // Speed preset buttons
     const presetBtns = document.querySelectorAll('.speed-preset-btn');
     presetBtns.forEach(btn => {
         btn.addEventListener('click', function() {
@@ -329,7 +422,6 @@ function initTTSSettingsModal() {
         });
     });
     
-    // Auto-scroll toggle
     const autoScrollToggle = document.getElementById('autoScrollToggle');
     if (autoScrollToggle) {
         autoScrollToggle.addEventListener('change', function() {
@@ -338,7 +430,6 @@ function initTTSSettingsModal() {
         });
     }
     
-    // Load saved preferences
     loadVoicePreference();
     
     const savedAutoScroll = localStorage.getItem('ttsAutoScroll');
@@ -347,16 +438,15 @@ function initTTSSettingsModal() {
         if (autoScrollToggle) autoScrollToggle.checked = autoScrollEnabled;
     }
     
-    // Set active speed preset
     updateActiveSpeedPreset(currentSpeed);
     
-    // Populate voices after they're loaded
     setTimeout(() => {
         if (availableVoices.length > 0) {
             populateVoiceList(availableVoices);
         }
     }, 100);
 }
+
 function updateActiveSpeedPreset(speed) {
     const presetBtns = document.querySelectorAll('.speed-preset-btn');
     presetBtns.forEach(btn => {
@@ -368,6 +458,7 @@ function updateActiveSpeedPreset(speed) {
         }
     });
 }
+
 function openTTSSettings() {
     const modal = document.getElementById('ttsSettingsModal');
     if (modal) modal.classList.add('active');
@@ -426,17 +517,17 @@ function toggleTTSPlayback() {
 }
 
 function startTTSPlayback() {
+    refreshTTSContent();
+    
     if (!ttsText || ttsText.trim().length === 0) {
         showToastMessage('No content to read', true);
         return;
     }
     
-    // Stop any ongoing speech
     if (speechSynthesis.speaking) {
         speechSynthesis.cancel();
     }
     
-    // Clear any pending progress interval
     if (progressInterval) {
         clearInterval(progressInterval);
         progressInterval = null;
@@ -551,7 +642,6 @@ function setupScrollTracking() {
     window.addEventListener('touchmove', () => { lastUserScrollTime = Date.now(); });
 }
 
-// Stop TTS when page is unloaded (closed, refreshed, or navigated away)
 function setupPageUnloadHandler() {
     window.addEventListener('beforeunload', () => {
         if (speechSynthesis.speaking) {
@@ -559,7 +649,6 @@ function setupPageUnloadHandler() {
         }
     });
     
-    // Also handle page visibility change (tab switch)
     document.addEventListener('visibilitychange', () => {
         if (document.hidden && speechSynthesis.speaking) {
             speechSynthesis.cancel();
@@ -585,27 +674,12 @@ function showToastMessage(msg, isError = false) {
     setTimeout(() => { toastEl.style.opacity = '0'; }, 2500);
 }
 
-function getCurrentPageUrl(postId) {
-    const baseUrl = window.location.href.split('?')[0];
-    return `${baseUrl}?id=${postId}`;
-}
-
-function updateBrowserUrl(postId) {
-    const newUrl = getCurrentPageUrl(postId);
-    window.history.pushState({ postId: postId }, '', newUrl);
-}
-
-function getPostIdFromUrl() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlId = urlParams.get('id');
-    if (urlId && !isNaN(parseInt(urlId))) {
-        return urlId;
-    }
-    return null;
-}
-
 function navigateToCategory(category) {
     window.location.href = `category.html?category=${encodeURIComponent(category)}`;
+}
+
+function navigateToTag(tag) {
+    window.location.href = `tag.html?tag=${encodeURIComponent(tag)}`;
 }
 
 function navigateToAuthor(authorName, authorDesignation) {
@@ -636,10 +710,28 @@ function stripHtml(html) {
     return temp.textContent || temp.innerText || "";
 }
 
-function updateSocialMetaTags(post) {
-    const shareUrl = getCurrentPageUrl(post.id);
-    const featuredImg = extractFirstImage(post.content);
+function parseTags(tagsString, content) {
+    let tags = [];
+    
+    if (tagsString && tagsString.trim()) {
+        tags = tagsString.split(',').map(t => t.trim()).filter(t => t);
+    }
+    
+    if (tags.length === 0 && content) {
+        const hashtagMatches = content.match(/#[\w\u0590-\u05fe]+/g);
+        if (hashtagMatches) {
+            tags = [...new Set(hashtagMatches.map(t => t.substring(1)))];
+        }
+    }
+    
+    return tags;
+}
+
+function updateSocialMetaTags(post, featuredImg) {
+    // Use full absolute URL for sharing
+    const shareUrl = getFullShareUrl(post.id);
     const description = stripHtml(post.content).substring(0, 200) + '...';
+    const imageToUse = featuredImg || extractFirstImage(post.content) || '';
     
     let ogTitle = document.querySelector('meta[property="og:title"]');
     let ogDescription = document.querySelector('meta[property="og:description"]');
@@ -651,11 +743,11 @@ function updateSocialMetaTags(post) {
     
     if (ogTitle) ogTitle.setAttribute('content', post.title + ' | NOC Blog');
     if (ogDescription) ogDescription.setAttribute('content', description);
-    if (ogImage && featuredImg) ogImage.setAttribute('content', featuredImg);
+    if (ogImage && imageToUse) ogImage.setAttribute('content', imageToUse);
     if (ogUrl) ogUrl.setAttribute('content', shareUrl);
     if (twitterTitle) twitterTitle.setAttribute('content', post.title + ' | NOC Blog');
     if (twitterDescription) twitterDescription.setAttribute('content', description);
-    if (twitterImage && featuredImg) twitterImage.setAttribute('content', featuredImg);
+    if (twitterImage && imageToUse) twitterImage.setAttribute('content', imageToUse);
     
     let metaDescription = document.querySelector('meta[name="description"]');
     if (!metaDescription) {
@@ -899,6 +991,24 @@ function escapeHtml(str) {
     return str.replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m] || m)); 
 }
 
+function renderTagsSection(tags) {
+    if (!tags || tags.length === 0) return '';
+    
+    return `
+        <div class="tags-section mt-4 pt-2">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <i class="bi bi-tags-fill text-muted"></i>
+                <span class="text-muted small">Tags:</span>
+                ${tags.map(tag => `
+                    <span class="tag-badge" data-tag="${escapeHtml(tag)}" style="cursor: pointer; background: #eef2ff; color: #4f46e5; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; transition: all 0.2s;">
+                        #${escapeHtml(tag)}
+                    </span>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
 // ======================== COMMENTS FUNCTIONS ========================
 function renderCommentsSection() {
     const wrapper = document.getElementById("postContentWrapper");
@@ -1136,17 +1246,18 @@ async function renderPostPage(post, comments) {
     document.getElementById("loadingSpinner").style.display = "none";
     document.getElementById("postContentWrapper").style.display = "block";
 
-    updateSocialMetaTags(post);
+    const featuredImg = extractFirstImage(post.content);
+    updateSocialMetaTags(post, featuredImg);
     document.title = `${post.title} | NOC / blog`;
-    updateBrowserUrl(post.id);
     
     const avatarLetter = (post.author.charAt(0) || 'A').toUpperCase();
-    const featuredImg = extractFirstImage(post.content);
     const authorProfile = await fetchAuthorProfile(post.author);
     let contentWithoutFirstImage = post.content;
     if (featuredImg) {
         contentWithoutFirstImage = removeFirstImageFromContent(post.content);
     }
+    
+    const tags = parseTags(post.tags, post.content);
     
     let authorAvatarHtml = '';
     if (authorProfile.imageUrl) {
@@ -1163,7 +1274,8 @@ async function renderPostPage(post, comments) {
                            </div>`;
     }
     
-    const shareUrl = getCurrentPageUrl(post.id);
+    // Use full absolute URL for sharing
+    const shareUrl = getFullShareUrl(post.id);
     
     let contentHtml = `<div class="blog-header">
         <div class="text-muted small mb-2">
@@ -1195,6 +1307,7 @@ async function renderPostPage(post, comments) {
     
     contentHtml += `<div class="blog-content-wrapper">
         <div class="blog-content">${contentWithoutFirstImage}</div>
+        ${renderTagsSection(tags)}
     </div>
     <div class="action-bar">
         <button id="likeButton" class="action-btn like-btn"><i class="bi bi-hand-thumbs-up"></i> <span id="likeCountSpan">${post.likeCount}</span> likes</button>
@@ -1204,6 +1317,13 @@ async function renderPostPage(post, comments) {
     
     document.getElementById("postContentWrapper").innerHTML = contentHtml;
     renderCommentsSection();
+    
+    document.querySelectorAll('.tag-badge').forEach(badge => {
+        badge.addEventListener('click', () => {
+            const tag = badge.getAttribute('data-tag');
+            navigateToTag(tag);
+        });
+    });
     
     initTTSWidget();
     setupScrollTracking();
@@ -1293,6 +1413,10 @@ async function renderPostPage(post, comments) {
     document.getElementById("shareButton")?.addEventListener("click", () => {
         openShareModal(shareUrl, post.title, featuredImg);
     });
+    
+    setTimeout(() => {
+        refreshTTSContent();
+    }, 300);
 }
 
 // ======================== INITIALIZATION ========================
@@ -1301,7 +1425,8 @@ async function initPostPage() {
     loadTTSPreferences();
     await loadVoices();
     
-    let postId = getPostIdFromUrl();
+    const postId = getPostIdFromUrl();
+    
     if(!postId) {
         document.getElementById("loadingSpinner").innerHTML = `<div class="error-box alert alert-danger">
             <i class="bi bi-exclamation-triangle-fill"></i><br>
@@ -1312,9 +1437,9 @@ async function initPostPage() {
         return;
     }
     
-    currentPostId = postId;
     try {
         allPostsMaster = await fetchAllPosts();
+        currentPostId = postId;
         const { post, comments } = await fetchPostData(postId);
         currentPost = post;
         await renderPostPage(post, comments);
@@ -1331,12 +1456,11 @@ async function initPostPage() {
 // ======================== EVENT LISTENERS ========================
 window.addEventListener('popstate', function(event) {
     const postId = getPostIdFromUrl();
-    if (postId && postId !== currentPostId) {
+    if (postId) {
         window.location.reload();
     }
 });
 
-// Make functions globally accessible
 window.shareOnFacebook = shareOnFacebook;
 window.shareOnTwitter = shareOnTwitter;
 window.shareOnWhatsApp = shareOnWhatsApp;
@@ -1347,5 +1471,4 @@ window.closeShareModal = closeShareModal;
 window.closeTTSSettings = closeTTSSettings;
 window.toggleTTSPlayback = toggleTTSPlayback;
 
-// Start the application
 initPostPage();
