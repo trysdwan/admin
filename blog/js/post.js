@@ -29,6 +29,7 @@ let relatedSwiper = null;
 function createSlug(title) {
     return title
         .toLowerCase()
+<<<<<<< HEAD
         .replace(/[^\w\s-]/g, '')
         .replace(/\s+/g, '-')
         .replace(/-+/g, '-')
@@ -60,6 +61,69 @@ function getPostIdFromUrl() {
     return null;
 }
 
+=======
+        .replace(/[^\w\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-')     // Replace spaces with hyphens
+        .replace(/-+/g, '-')      // Replace multiple hyphens with single
+        .trim();
+}
+
+// Check if running locally (file:// protocol)
+function isLocalFileProtocol() {
+    return window.location.protocol === 'file:';
+}
+
+// Get current page URL (always use ID-based URL to avoid issues)
+function getCurrentPageUrl(postId, postTitle) {
+    // Always use the reliable ID-based URL format
+    return `post.html?id=${postId}`;
+}
+
+// Get post ID from URL (supports both formats)
+function getPostIdFromUrl() {
+    // First check for id parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlId = urlParams.get('id');
+    if (urlId && !isNaN(parseInt(urlId))) {
+        return { type: 'id', value: urlId };
+    }
+    
+    // Check for slug format in path (for backward compatibility)
+    const path = window.location.pathname;
+    const slugMatch = path.match(/\/post\/([^/?]+)/);
+    if (slugMatch) {
+        return { type: 'slug', value: slugMatch[1] };
+    }
+    
+    return null;
+}
+
+// Find post by slug
+function findPostBySlug(slug, posts) {
+    return posts.find(post => createSlug(post.title) === slug);
+}
+
+// Update browser URL with pretty slug (optional - only on server)
+function updateBrowserUrl(postId, postTitle) {
+    // Skip URL update if running on local file protocol or if we don't have post title
+    if (isLocalFileProtocol() || !postTitle) {
+        console.log('Skipping URL update - local file protocol or missing title');
+        return;
+    }
+    
+    try {
+        const slug = createSlug(postTitle);
+        // Use hash-based URL that doesn't cause history issues
+        // Format: post.html?id=14#/post/slug - this won't trigger a page reload
+        const newUrl = `post.html?id=${postId}`;
+        // Just update the hash for pretty URL without breaking functionality
+        window.history.pushState({ postId: postId, slug: slug }, '', newUrl);
+    } catch (error) {
+        console.warn('Could not update browser URL:', error.message);
+    }
+}
+
+>>>>>>> 69e81683d9dbaf1a83388363de5dfdb1d88f88a5
 // Get text to read (title + author details + content without HTML) with sentence splitting
 function getTTSContent() {
     const titleElement = document.querySelector('.blog-title');
@@ -691,6 +755,7 @@ function navigateToAuthor(authorName, authorDesignation) {
 }
 
 function navigateToPost(postId) {
+    // Always use the reliable ID-based URL
     window.location.href = `post.html?id=${postId}`;
 }
 
@@ -728,8 +793,12 @@ function parseTags(tagsString, content) {
 }
 
 function updateSocialMetaTags(post, featuredImg) {
+<<<<<<< HEAD
     // Use full absolute URL for sharing
     const shareUrl = getFullShareUrl(post.id);
+=======
+    const shareUrl = getCurrentPageUrl(post.id, post.title);
+>>>>>>> 69e81683d9dbaf1a83388363de5dfdb1d88f88a5
     const description = stripHtml(post.content).substring(0, 200) + '...';
     const imageToUse = featuredImg || extractFirstImage(post.content) || '';
     
@@ -1249,6 +1318,10 @@ async function renderPostPage(post, comments) {
     const featuredImg = extractFirstImage(post.content);
     updateSocialMetaTags(post, featuredImg);
     document.title = `${post.title} | NOC / blog`;
+<<<<<<< HEAD
+=======
+    updateBrowserUrl(post.id, post.title);
+>>>>>>> 69e81683d9dbaf1a83388363de5dfdb1d88f88a5
     
     const avatarLetter = (post.author.charAt(0) || 'A').toUpperCase();
     const authorProfile = await fetchAuthorProfile(post.author);
@@ -1274,8 +1347,12 @@ async function renderPostPage(post, comments) {
                            </div>`;
     }
     
+<<<<<<< HEAD
     // Use full absolute URL for sharing
     const shareUrl = getFullShareUrl(post.id);
+=======
+    const shareUrl = getCurrentPageUrl(post.id, post.title);
+>>>>>>> 69e81683d9dbaf1a83388363de5dfdb1d88f88a5
     
     let contentHtml = `<div class="blog-header">
         <div class="text-muted small mb-2">
@@ -1425,9 +1502,15 @@ async function initPostPage() {
     loadTTSPreferences();
     await loadVoices();
     
+<<<<<<< HEAD
     const postId = getPostIdFromUrl();
     
     if(!postId) {
+=======
+    const urlInfo = getPostIdFromUrl();
+    
+    if(!urlInfo) {
+>>>>>>> 69e81683d9dbaf1a83388363de5dfdb1d88f88a5
         document.getElementById("loadingSpinner").innerHTML = `<div class="error-box alert alert-danger">
             <i class="bi bi-exclamation-triangle-fill"></i><br>
             <strong>No post ID found!</strong><br>
@@ -1439,6 +1522,26 @@ async function initPostPage() {
     
     try {
         allPostsMaster = await fetchAllPosts();
+<<<<<<< HEAD
+=======
+        
+        let postId = null;
+        
+        if (urlInfo.type === 'id') {
+            postId = urlInfo.value;
+        } else if (urlInfo.type === 'slug') {
+            const post = findPostBySlug(urlInfo.value, allPostsMaster);
+            if (post) {
+                postId = post.id;
+                // Redirect to the proper ID-based URL
+                window.location.href = `post.html?id=${postId}`;
+                return;
+            } else {
+                throw new Error(`Post with slug "${urlInfo.value}" not found`);
+            }
+        }
+        
+>>>>>>> 69e81683d9dbaf1a83388363de5dfdb1d88f88a5
         currentPostId = postId;
         const { post, comments } = await fetchPostData(postId);
         currentPost = post;
@@ -1455,8 +1558,13 @@ async function initPostPage() {
 
 // ======================== EVENT LISTENERS ========================
 window.addEventListener('popstate', function(event) {
+<<<<<<< HEAD
     const postId = getPostIdFromUrl();
     if (postId) {
+=======
+    const urlInfo = getPostIdFromUrl();
+    if (urlInfo) {
+>>>>>>> 69e81683d9dbaf1a83388363de5dfdb1d88f88a5
         window.location.reload();
     }
 });
